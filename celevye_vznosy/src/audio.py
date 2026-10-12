@@ -6,7 +6,11 @@ from scipy.signal import resample_poly
 SR = 48000
 W = '/tmp/claude-0/-home-user-ishodniki-video/7fdd3399-3b0b-583b-a74f-2847502fb422/scratchpad/work/'
 LEAD = 0.6          # speech starts this long after the cut
+import os
+HAS14 = os.path.exists(W + 'vo/14.wav')   # reassurance line after the total
 KEEP = [(0, 27), (31, 102), (112, 118), (116, None)]   # original bar ranges played in order (12 bars out, 2 sparse bars looped)
+if HAS14:   # 5 bars of the kick-less breakdown under the new block; the groove comes back on the cut to 09b
+    KEEP = [(0, 27), (31, 82), (36, 39), (38, 40), (82, 102), (112, 118), (116, None)]
 BEAT_OFFSET = 0.062   # tracked grid sat between 16ths; kick/snare land 62 ms later
 
 ITEMS = [('logo', None, 'start'),
@@ -18,7 +22,7 @@ ITEMS = [('logo', None, 'start'),
  ('06a', ('06', 0, 1), 'scene'), ('06b', ('06', 2, 6), 'intra'),
  ('07a', ('07', 0, 1), 'scene'), ('07b', ('07', 2, 3), 'intra'),
  ('08', ('08', 0, 1), 'scene'),
- ('09a', ('09', 0, 0), 'scene'), ('09b', ('09', 1, 2), 'intra'),
+ ('09a', ('09', 0, 0), 'scene'), ('09n', ('14', 0, 2), 'intra'), ('09b', ('09', 1, 2), 'intra'),
  ('10a', ('10', 0, 1), 'scene'), ('10b', ('10', 2, 2), 'intra'), ('10c', ('10', 3, 3), 'intra'),
  ('11', ('11', 0, 1), 'scene'), ('12', ('12', 0, 3), 'scene'),
  ('13a', ('13', 0, 0), 'scene'), ('13b', ('13', 1, 3), 'intra')]
@@ -86,12 +90,13 @@ def edit_music():
         s1 = len(x) / SR if b is None else onset(x, db[b])
         keep.append((s0, s1))
     xf = int(0.02 * SR); pre = int(0.003 * SR)
-    out = np.zeros(0); bmap = []; seen = set()
+    out = np.zeros(0); bmap = []; seen = set(); starts = []
     for k, (s, e) in enumerate(keep):
         i0 = int(s * SR) - pre - (xf if k else 0)
         i1 = int(e * SR) - pre if k < len(keep) - 1 else len(x)
         seg = x[max(i0, 0):i1].copy()
         offset = (len(out) - (xf if k else 0)) / SR - max(i0, 0) / SR
+        starts.append(s + offset)
         if k:
             r = np.linspace(0, np.pi / 2, xf)
             seg[:xf] *= np.sin(r)
@@ -103,7 +108,7 @@ def edit_music():
         for bi, bt in enumerate(beats):
             if s - 0.08 <= bt < e - 0.08:
                 bmap.append((bt + offset, bi if bi not in seen else -1)); seen.add(bi)
-    return out, bmap
+    return out, bmap, starts
 
 
 def build(beats, force=None, extra=None):
@@ -112,6 +117,8 @@ def build(beats, force=None, extra=None):
     segs = json.load(open(W + 'segs.json'))
     tl, t_end = [], None
     for name, clip, kind in ITEMS:
+        if clip and clip[0] not in segs:
+            continue
         if kind == 'start':
             tl.append(dict(name=name, cut=beats[0][0], kind=kind)); continue
         if t_end is None:
@@ -141,7 +148,7 @@ def build(beats, force=None, extra=None):
 def voice_stem(tl, total):
     segs = json.load(open(W + 'segs.json'))
     files = {}
-    for k in range(1, 14):
+    for k in range(1, 15 if HAS14 else 14):
         f = '%02d' % k
         x = rd(W + 'vo/%s.wav' % f)
         files[f] = x * 10 ** ((-18.6 - lufs(x)) / 20)   # equalise takes
@@ -162,13 +169,15 @@ def voice_stem(tl, total):
 
 
 def main():
-    m, bmap = edit_music()
+    m, bmap, starts = edit_music()
     wavfile.write(W + 'music_edit.wav', SR, m.astype(np.float32))
     # musical landmarks after the edit
     lm = {ob: t for t, ob in bmap}
     db = lambda bar: lm[bar * 4]
     # scene cuts that should coincide with musical events / music edit points
     base = {'04a': db(31), '08': db(71), '09a': db(77), '12': db(112)}
+    if HAS14:
+        base.update({'09n': starts[2], '09b': starts[4]})
     tl, _ = build(bmap, base)
     c07 = [d for d in tl if d['name'] == '07b'][0]['cut']
     later = [t for t, _ in bmap if t > c07 + 0.3][0]

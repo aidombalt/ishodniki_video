@@ -756,6 +756,9 @@ def cues():
     return res
 
 
+ADJ = ('ая', 'яя', 'ую', 'юю', 'ой', 'ей', 'ых', 'их', 'ым', 'им', 'ое', 'ее', 'ий', 'ый', 'ого', 'его', 'ому', 'ему', 'ыми', 'ими')
+
+
 def sub_lines(txt, maxw=1480):
     if tw(txt, 'M', 56) <= maxw: return [txt]
     words = txt.split(' '); best = None
@@ -764,7 +767,8 @@ def sub_lines(txt, maxw=1480):
         if words[i - 1].lower() in PREP: continue
         wa, wb = tw(a, 'M', 56), tw(b, 'M', 56)
         if max(wa, wb) > maxw: continue
-        sc = abs(wa - wb) - (60 if a.endswith((',', ':', '—', '.')) else 0) + (0 if wa >= wb * 0.6 else 200)
+        adj = words[i - 1].lower().endswith(ADJ)   # keep adjective + noun together
+        sc = abs(wa - wb) - (420 if a.endswith((',', ':', '—', '.')) else 0) + (500 if adj else 0) + (0 if min(wa, wb) >= max(wa, wb) * 0.35 else 600)
         if best is None or sc < best[0]: best = (sc, [a, b])
     return best[1]
 
