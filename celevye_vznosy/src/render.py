@@ -26,9 +26,10 @@ KY = 190          # kicker baseline
 TY = 300          # title baseline
 SAFE_BOTTOM = 790
 
-TL = json.load(open(WORK + 'timeline.json'))
+import os
+TL = json.load(open(os.environ.get('TLFILE', WORK + 'timeline.json')))
 ITEMS = {d['name']: d for d in TL['timeline']}
-SEGS = json.load(open(WORK + 'segs.json'))
+SEGS = json.load(open(os.environ.get('SEGFILE', WORK + 'segs.json')))
 TOTAL = TL['total']
 
 
@@ -466,10 +467,11 @@ def money_scene(f, a, b, nxt, q, ttl, t_ttl, label, items, qual, img, rate, tota
         draw_img(ctx, img, (r[0], r[1] + dy, r[2], r[3]), a_, ref=boxA)
     e = El(dimg, c1 + 0.1, end, 0.6, 0.3, 26, box=(boxA[0], boxA[1], boxA[0] + boxA[2], boxA[1] + boxA[3]), name='ill', kind='card')
     e.boxes = [(0, c2 - 0.2, e.box), (c2 - 0.2, 1e9, (boxB[0], boxB[1], boxB[0] + boxB[2], boxB[1] + boxB[3]))]; ELS.append(e)
-    cw_ = tw('Условная иллюстрация', 'R', 56)
+    CAP = 32   # disclaimer under illustrations: small, unobtrusive
+    cw_ = tw('Условная иллюстрация', 'R', CAP)
     cxA = min(boxA[0] + boxA[2] / 2, R - cw_ / 2); cxB = min(boxB[0] + boxB[2] / 2, R - cw_ / 2)
-    capA = Text('Условная иллюстрация', 'R', 56, cxA, boxA[1] + boxA[3] + 52, MUTED, 'c')
-    capB_y = boxB[1] + boxB[3] + 60
+    capA = Text('Условная иллюстрация', 'R', CAP, cxA, boxA[1] + boxA[3] + 40, MUTED, 'c')
+    capB_y = boxB[1] + boxB[3] + 40
 
     def dcap(ctx, t, a_, dy):
         k = ease_io((t - (c2 - 0.2)) / 0.7)
@@ -554,6 +556,8 @@ def sc_08():
 
 def sc_09():
     c1, c2, end = cut('09a'), cut('09b'), cut('10a')
+    has_n = '09n' in ITEMS          # optional reassurance block right after the total
+    cm = cut('09n') if has_n else c2
     kicker('Если собрание примет все четыре вопроса', c1, end)
     title('Для квартиры 41' + NB + 'м²', c1 + 0.55, end)
     vals = [('8', '3' + NB + '482,54'), ('10', '4' + NB + '508,36'), ('11', '8' + NB + '492,74'), ('12', '1' + NB + '538,32')]
@@ -561,40 +565,45 @@ def sc_09():
     for i, (q, v) in enumerate(vals):
         x = L + (i % 2) * (gw + 30); y = 370 + (i // 2) * 150
         ti = c1 + 0.8 + 0.12 * i
-        cd = add_card(x, y, gw, 130, ti, c2, name='sum-tile')
-        add_text('Вопрос ' + q, 'R', 56, x + 44, y + 85, ti + 0.05, c2, MUTED, inside=cd)
-        add_text(v + NB + '₽', 'D', 64, x + gw - 44, y + 87, ti + 0.08, c2, NAVY, 'r', inside=cd)
+        cd = add_card(x, y, gw, 130, ti, cm, name='sum-tile')
+        add_text('Вопрос ' + q, 'R', 56, x + 44, y + 85, ti + 0.05, cm, MUTED, inside=cd)
+        add_text(v + NB + '₽', 'D', 64, x + gw - 44, y + 87, ti + 0.08, cm, NAVY, 'r', inside=cd)
     ts = word_t('09', 0, 'общая сумма') - 0.3
 
     def drule(ctx, t, a, dy):
         k = ease_out((t - ts) / 0.7)
         rrect(ctx, L, 668, (R - L) * k, 4, 2); ctx.set_source_rgba(*NAVY, a); ctx.fill()
-    ELS.append(El(drule, ts, c2, 0.2, 0.3, 0, box=(L, 668, R, 672), name='sumrule'))
+    ELS.append(El(drule, ts, cm, 0.2, 0.3, 0, box=(L, 668, R, 672), name='sumrule'))
     lab = Text('Общая сумма', 'R', 56, L, 766, MUTED)
-    LAB_B = 434
+    LAB_B = 420 if has_n else 434
     big = Text('18' + NB + '021,96' + NB + '₽', 'B', 170, L, 0, NAVY)
     sA = 100 / 170
-    yA, yB = 770, 594
+    yA, yB = 770, (578 if has_n else 594)
     xA = R - (big.bbox()[2] - L) * sA   # align the ink edge to the right margin
 
     def dlab(ctx, t, a, dy):
-        k = ease_io((t - (c2 - 0.2)) / 0.7)
+        k = ease_io((t - (cm - 0.2)) / 0.7)
         lab.draw(ctx, a, 0, dy + lerp(0, LAB_B - 766, k))
     e = El(dlab, ts + 0.1, end, 0.5, 0.3, 18, box=lab.bbox(), name='sumlabel'); lb = lab.bbox()
-    e.boxes = [(0, c2 - 0.2, lb), (c2 - 0.2, 1e9, (lb[0], lb[1] + LAB_B - 766, lb[2], lb[3] + LAB_B - 766))]; ELS.append(e)
+    e.boxes = [(0, cm - 0.2, lb), (cm - 0.2, 1e9, (lb[0], lb[1] + LAB_B - 766, lb[2], lb[3] + LAB_B - 766))]; ELS.append(e)
 
     def dbig(ctx, t, a, dy):
-        k = ease_io((t - (c2 - 0.2)) / 0.7)
+        k = ease_io((t - (cm - 0.2)) / 0.7)
         s = lerp(sA, 1, k); x = lerp(xA, L, k); y = lerp(yA, yB, k)
         ctx.save(); ctx.translate(x, y + dy); ctx.scale(s, s)
         surf, _, ox, oy, _ = tmask(big.txt, 'B', 170)
         ctx.set_source_rgba(*NAVY, a); ctx.mask_surface(surf, ox, oy); ctx.restore()
     bb = big.bbox()
     e = El(dbig, ts + 0.2, end, 0.5, 0.3, 18, box=(L, yB + bb[1], L + big.width, yB + bb[3]), name='total')
-    e.boxes = [(0, c2 - 0.2, (xA + (bb[0] - L) * sA, yA + bb[1] * sA, xA + (bb[2] - L) * sA, yA + bb[3] * sA)), (c2 - 0.2, 1e9, e.box)]
+    e.boxes = [(0, cm - 0.2, (xA + (bb[0] - L) * sA, yA + bb[1] * sA, xA + (bb[2] - L) * sA, yA + bb[3] * sA)), (cm - 0.2, 1e9, e.box)]
     ELS.append(e)
-    accent_bar((L, yB + bb[1], L + big.width, yB + bb[3]), c2 + 0.5, end)
-    add_text('Взнос на распределители в этот расчёт не входит', 'M', 60, L, 732, seg_t('09', 1) - 0.25, end, NAVY)
+    accent_bar((L, yB + bb[1], L + big.width, yB + bb[3]), cm + 0.5, end)
+    ny = 700 if has_n else 732
+    if has_n:
+        add_text('Это не ежемесячная плата, а разовые взносы', 'M', 60, L, ny, seg_t('14', 0) - 0.25, c2, NAVY)
+        add_text('Сумма зависит от того, какие вопросы примет собрание', 'R', 56, L, ny + 74,
+                 seg_t('14', len(SEGS['14']) - 1) - 0.25, c2, MUTED)
+    add_text('Взнос на распределители в этот расчёт не входит', 'M', 60, L, ny, seg_t('09', 1) - 0.25, end, NAVY)
 
 
 def sc_10():
@@ -718,6 +727,8 @@ def cues():
     out = []
     for f in sorted(SUBS):
         for k in sorted(SUBS[f]):
+            if f not in SEGS or k >= len(SEGS[f]) or not _item_for(f, k):
+                continue   # line not in the current cut (e.g. the optional block before its voice is recorded)
             pieces = SUBS[f][k]; a, b = SEGS[f][k]; sp = SPOKEN[f][k]
             pos = 0
             for txt, spk in pieces:
