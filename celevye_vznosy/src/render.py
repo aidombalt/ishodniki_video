@@ -19,12 +19,12 @@ def hexc(h): return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
 
 NAVY, CYAN, INK, LIGHT, WHITE = hexc('#002A5B'), hexc('#00A0E3'), hexc('#111820'), hexc('#EEF3F7'), (1, 1, 1)
 MUTED = hexc('#56606C')       # secondary text (ink, softened)
-KICK = hexc('#4A6688')        # kicker (navy, softened)
+KICK = MUTED                  # one secondary colour for kickers, captions, notes
 RULE = hexc('#C9D5E1')
 L, R = 150, 1770
 KY = 190          # kicker baseline
 TY = 300          # title baseline
-SAFE_BOTTOM = 840
+SAFE_BOTTOM = 790
 
 TL = json.load(open(WORK + 'timeline.json'))
 ITEMS = {d['name']: d for d in TL['timeline']}
@@ -244,7 +244,7 @@ def icon(ctx, kind, x, y, s, color, a):
 # ---------------------------------------------------------------- scene graph
 class El:
     """Visible from t_in (fade-in din, rising) to t_out (fade-out dout ending at t_out)."""
-    def __init__(s, draw, t_in, t_out, din=0.5, dout=0.3, rise=22, box=None, kind='content', name='', inside=None):
+    def __init__(s, draw, t_in, t_out, din=0.45, dout=0.2, rise=22, box=None, kind='content', name='', inside=None):
         s.drawf, s.t_in, s.t_out, s.din, s.dout, s.rise = draw, t_in, t_out, din, dout, rise
         s.box, s.kind, s.name, s.inside = box, kind, name, inside
         s.boxes = None
@@ -269,7 +269,7 @@ class El:
 ELS = []
 
 
-def add_text(txt, w, size, x, y, t_in, t_out, color=INK, align='l', din=0.5, dout=0.3, rise=22, inside=None, name=''):
+def add_text(txt, w, size, x, y, t_in, t_out, color=INK, align='l', din=0.45, dout=0.2, rise=22, inside=None, name=''):
     o = Text(txt, w, size, x, y, color, align)
     ELS.append(El(lambda ctx, t, a, dy, o=o: o.draw(ctx, a, 0, dy), t_in, t_out, din, dout, rise, box=o.bbox(),
                   name=name or txt[:24], inside=inside))
@@ -332,17 +332,18 @@ def caption_ill(x_right, y, t_in, t_out):
 def sc_logo():
     t0, t1 = cut('logo'), cut('01rad')
     logo = WD + 'in_vis/inner/assets/petersburg_dom_transparent.png'
-    rect = fit(logo, (L, 150, R - L, 440))
+    rect = fit(logo, LOGO_BOX)
 
     def d(ctx, t, a, dy):
         k = ease_out((t - t0) / 1.0); sc = 0.96 + 0.04 * k
         x, y, w, h = rect; cx, cy = x + w / 2, y + h / 2
         draw_img(ctx, logo, (cx - w * sc / 2, cy - h * sc / 2 + dy * 0.3, w * sc, h * sc), a, ref=rect)
     ELS.append(El(d, t0, t1, 0.9, 0.35, 0, box=(rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]), name='logo'))
-    add_text('ЖК «Екатерининский»', 'D', 64, 960, 700, t0 + 0.55, t1, NAVY, 'c')
-    add_text('Екатерининский проспект, д.' + NB + '2, стр.' + NB + '1', 'R', 56, 960, 780, t0 + 0.7, t1, MUTED, 'c')
+    add_text('ЖК «Екатерининский»', 'D', 64, 960, 670, t0 + 0.55, t1, NAVY, 'c')
+    add_text('Екатерининский проспект, д.' + NB + '2, стр.' + NB + '1', 'R', 56, 960, 750, t0 + 0.7, t1, MUTED, 'c')
 
 
+LOGO_BOX = (L, 130, R - L, 420)
 RAD = ASSETS + 'previous_radiator.png'
 TILES = [ASSETS + n for n in ('water.png', 'halls.png', 'kids.png', 'sport.png')]
 
@@ -351,9 +352,10 @@ def sc_01():
     c1, c2, end = cut('01rad'), cut('01main'), cut('02q')
     kicker('В прошлом видео', c1, c2)
     title('Распределители тепла', c1 + 0.08, c2)
-    card0 = (720, 340, 1050, 490)
+    card0 = (720, 330, 1050, 460)
     tw_, gap = 380, (R - L - 4 * 380) / 3
-    tiles = [(L + i * (tw_ + gap), 540, tw_, 290) for i in range(4)]
+    TH = 270
+    tiles = [(L + i * (tw_ + gap), 520, tw_, TH) for i in range(4)]
     rim = load_img(RAD, crop=False)
     # radiator photo in a rounded card, then the card becomes the first work tile
     def morph(ctx, t, a, dy):
@@ -365,15 +367,15 @@ def sc_01():
         if k < 1:   # cover-fit photo, anchored on the radiator (right part)
             s = max(w / rim.width, h / rim.height)
             iw, ih = rim.width * s, rim.height * s
-            draw_img(ctx, RAD, (x + w - iw + 0.02 * iw, y + (h - ih) / 2, iw, ih), a * (1 - ease_io(k * 1.4)), crop=False,
+            draw_img(ctx, RAD, (x + w - iw, y + (h - ih) / 2, iw, ih), a * (1 - ease_io(k * 1.4)), crop=False,
                      ref=(0, 0, 1100, 1100 * rim.height / rim.width))
         if k > 0:
             r_ = fit(TILES[0], (x + 18, y + 14, w - 36, h - 28))
-            draw_img(ctx, TILES[0], r_, a * ease_io((k - 0.35) / 0.65), ref=fit(TILES[0], (0, 0, tw_ - 36, 290 - 28)))
+            draw_img(ctx, TILES[0], r_, a * ease_io((k - 0.35) / 0.65), ref=fit(TILES[0], (0, 0, tw_ - 36, TH - 28)))
         ctx.restore()
     e = El(morph, c1 + 0.15, end, 0.6, 0.3, 22, box=(card0[0], card0[1], card0[0] + card0[2], card0[1] + card0[3]),
            kind='card', name='radiator')
-    e.boxes = [(0, c2 - 0.15, e.box), (c2 - 0.15, 1e9, (tiles[0][0], tiles[0][1], tiles[0][0] + tw_, tiles[0][1] + 290))]
+    e.boxes = [(0, c2 - 0.15, e.box), (c2 - 0.15, 1e9, (tiles[0][0], tiles[0][1], tiles[0][0] + tw_, tiles[0][1] + TH))]
     ELS.append(e)
     for i in (1, 2, 3):
         x, y, w, h = tiles[i]
@@ -382,7 +384,7 @@ def sc_01():
             draw_img(ctx, TILES[i], fit(TILES[i], (x + 18, y + 14 + dy, w - 36, h - 28)), a)
         ELS.append(El(d, c2 + 0.25 + 0.1 * i, end, 0.55, 0.3, 26, box=(x, y, x + w, y + h), kind='card', name='tile'))
     kicker('Ещё одна часть повестки', c2, end)
-    t_title = seg_t('01', 2) - 0.25
+    t_title = seg_t('01', 2) - 1.2
     title('Целевые взносы', t_title, end)
     add_text('на работы в доме и во дворе', 'M', 60, L, TY + 82, t_title + 0.1, end, NAVY)
     add_text('Что предлагается и сколько составит взнос', 'R', 60, L, TY + 162, seg_t('01', 3) - 0.25, end, INK)
@@ -449,14 +451,14 @@ def sc_03():
     add_lines(wrap(src, 'R', 56, R - L), 'R', 56, L, 680, 74, seg_t('03', 0) - 0.2, c2, MUTED)
     add_text('Эту площадь возьмём для примера', 'M', 60, L, 330, c2, end, INK)
     add_text('Для расчёта подставьте общую площадь своей квартиры', 'M', 56, L, 680, seg_t('03', 3) - 0.25, end, INK)
-    add_text('Если она отличается, изменится и сумма', 'R', 56, L, 765, seg_t('03', 5) - 0.25, end, MUTED)
+    add_text('Если она отличается, изменится и сумма', 'R', 56, L, 752, seg_t('03', 5) - 0.25, end, MUTED)
 
 
 def money_scene(f, a, b, nxt, q, ttl, t_ttl, label, items, qual, img, rate, total):
     c1, c2, end = cut(a), cut(b), cut(nxt)
     kicker('Вопрос ' + q + ' · разовый взнос', c1, end)
-    title(ttl, t_ttl, end)
-    boxA = fit(img, (1060, 350, 710, 420)); boxB = fit(img, (1150, 360, 620, 290))
+    title(ttl, c1 + 0.08, end)
+    boxA = fit(img, (1060, 340, 710, 360)); boxB = fit(img, (1150, 350, 620, 280))
 
     def dimg(ctx, t, a_, dy):
         k = ease_io((t - (c2 - 0.2)) / 0.7)
@@ -464,36 +466,39 @@ def money_scene(f, a, b, nxt, q, ttl, t_ttl, label, items, qual, img, rate, tota
         draw_img(ctx, img, (r[0], r[1] + dy, r[2], r[3]), a_, ref=boxA)
     e = El(dimg, c1 + 0.1, end, 0.6, 0.3, 26, box=(boxA[0], boxA[1], boxA[0] + boxA[2], boxA[1] + boxA[3]), name='ill', kind='card')
     e.boxes = [(0, c2 - 0.2, e.box), (c2 - 0.2, 1e9, (boxB[0], boxB[1], boxB[0] + boxB[2], boxB[1] + boxB[3]))]; ELS.append(e)
-    capA = Text('Условная иллюстрация', 'R', 56, R, boxA[1] + boxA[3] + 52, MUTED, 'r')
-    capB_y = boxB[1] + boxB[3] + 64
+    cw_ = tw('Условная иллюстрация', 'R', 56)
+    cxA = min(boxA[0] + boxA[2] / 2, R - cw_ / 2); cxB = min(boxB[0] + boxB[2] / 2, R - cw_ / 2)
+    capA = Text('Условная иллюстрация', 'R', 56, cxA, boxA[1] + boxA[3] + 52, MUTED, 'c')
+    capB_y = boxB[1] + boxB[3] + 60
 
     def dcap(ctx, t, a_, dy):
         k = ease_io((t - (c2 - 0.2)) / 0.7)
-        capA.draw(ctx, a_, 0, dy + (capB_y - capA.y) * k)
+        capA.draw(ctx, a_, (cxB - cxA) * k, dy + (capB_y - capA.y) * k)
     e = El(dcap, c1 + 0.3, end, 0.5, 0.3, 22, box=capA.bbox(), name='caption')
-    bA = capA.bbox(); e.boxes = [(0, c2 - 0.2, bA), (c2 - 0.2, 1e9, (bA[0], bA[1] + capB_y - capA.y, bA[2], bA[3] + capB_y - capA.y))]
+    bA = capA.bbox(); dxB, dyB = cxB - cxA, capB_y - capA.y
+    e.boxes = [(0, c2 - 0.2, bA), (c2 - 0.2, 1e9, (bA[0] + dxB, bA[1] + dyB, bA[2] + dxB, bA[3] + dyB))]
     ELS.append(e)
     # state A: what is replaced
     y = 410
     if label:
         add_text(label[0], 'R', 56, L, y, label[1] - 0.2, c2, MUTED); y += 80
     for txt, ti in items:
-        bullet_item(txt, L, y, ti - 0.2, c2); y += 78
+        bullet_item(txt, L, y, ti - 0.2, c2); y += 76
     if qual:
         lines = wrap(qual[0], 'R', 56, 840)
         add_lines(lines, 'R', 56, L, y + 22, 72, qual[1] - 0.2, c2, MUTED)
     # state B: calculation card
-    cx0, cy0, cw, ch = L, 350, 920, 460
+    cx0, cy0, cw, ch = L, 340, 920, 440
     card = add_card(cx0, cy0, cw, ch, c2, end, name='calc')
-    add_text('Ставка', 'R', 56, cx0 + 52, cy0 + 100, c2 + 0.08, end, MUTED, inside=card)
-    add_text(rate + NB + '₽ за' + NB + 'м²', 'D', 72, cx0 + cw - 52, cy0 + 100, c2 + 0.12, end, NAVY, 'r', inside=card)
+    add_text('Ставка', 'R', 56, cx0 + 52, cy0 + 95, c2 + 0.08, end, MUTED, inside=card)
+    add_text(rate + NB + '₽ за' + NB + 'м²', 'D', 72, cx0 + cw - 52, cy0 + 95, c2 + 0.12, end, NAVY, 'r', inside=card)
 
     def drule(ctx, t, a_, dy):
-        rrect(ctx, cx0 + 52, cy0 + 150 + dy, cw - 104, 3, 1.5); ctx.set_source_rgba(*RULE, a_); ctx.fill()
-    ELS.append(El(drule, c2 + 0.15, end, 0.5, 0.3, 10, box=(cx0 + 52, cy0 + 150, cx0 + cw - 52, cy0 + 153), name='rule', kind='deco'))
+        rrect(ctx, cx0 + 52, cy0 + 140 + dy, cw - 104, 3, 1.5); ctx.set_source_rgba(*RULE, a_); ctx.fill()
+    ELS.append(El(drule, c2 + 0.15, end, 0.5, 0.3, 10, box=(cx0 + 52, cy0 + 140, cx0 + cw - 52, cy0 + 143), name='rule', kind='deco'))
     t_sum = seg_t(f, max(k for k in SUBS[f] if SUBS[f][k][0][0].startswith('Для квартиры'))) - 0.25
-    lab = add_text('Взнос для квартиры 41' + NB + 'м²', 'R', 56, cx0 + 52, cy0 + 245, t_sum, end, MUTED, inside=card)
-    big = add_text(total + NB + '₽', 'B', 150, cx0 + 52, cy0 + 385, t_sum + 0.1, end, NAVY, inside=card)
+    lab = add_text('Взнос для квартиры 41' + NB + 'м²', 'R', 56, cx0 + 52, cy0 + 228, t_sum, end, MUTED, inside=card)
+    big = add_text(total + NB + '₽', 'B', 150, cx0 + 52, cy0 + 362, t_sum + 0.1, end, NAVY, inside=card)
     bb = big.bbox()
     accent_bar(bb, t_sum + 0.35, end)
 
@@ -504,7 +509,7 @@ def sc_04():
                 ('Замена элементов системы:', seg_t(f, 1) + 1.2),
                 [('стояки', seg_t(f, 2)), ('трубы в подвале', seg_t(f, 3)),
                  ('подпитка в тепловом пункте', word_t(f, 3, 'элементов подпитки'))],
-                ('Перечень участков по парадным — в бюллетене', seg_t(f, 4)), ASSETS + 'water.png', '84,94', '3' + NB + '482,54')
+                None, ASSETS + 'water.png', '84,94', '3' + NB + '482,54')
 
 
 def sc_05():
@@ -532,30 +537,30 @@ def sc_07():
 def sc_08():
     c1, end = cut('08'), cut('09a')
     kicker('Вопросы 11 и 12 · площадки', c1, end)
-    title('Отдельное условие', c1 + 0.4, end)
+    title('Отдельное условие', c1 + 0.1, end)
     t1 = seg_t('08', 1) - 0.3
-    card = add_card(L, 360, R - L, 455, t1 - 0.1, end, name='cond')
-    add_lines(['Если решение о финансировании', 'не будет принято,'], 'D', 64, L + 60, 455, 80, t1, end, NAVY, inside=card)
+    card = add_card(L, 350, R - L, 430, t1 - 0.1, end, name='cond')
+    add_lines(['Если решение о финансировании', 'не будет принято,'], 'D', 64, L + 60, 440, 80, t1, end, NAVY, inside=card)
 
     def dr(ctx, t, a, dy):
         k = ease_out((t - (word_t('08', 1, 'аварийное') - 0.3)) / 0.6)
-        rrect(ctx, L + 62, 575 + dy, 6, 190 * k, 3); ctx.set_source_rgba(*NAVY, a * 0.35); ctx.fill()
-    ELS.append(El(dr, word_t('08', 1, 'аварийное') - 0.3, end, 0.3, 0.3, 0, box=(L + 62, 575, L + 68, 765), name='rule', kind='deco'))
-    add_text('аварийное оборудование, подлежащее демонтажу,', 'R', 56, L + 110, 640, word_t('08', 1, 'аварийное') - 0.2, end,
+        rrect(ctx, L + 62, 562 + dy, 6, 180 * k, 3); ctx.set_source_rgba(*NAVY, a * 0.35); ctx.fill()
+    ELS.append(El(dr, word_t('08', 1, 'аварийное') - 0.3, end, 0.3, 0.3, 0, box=(L + 62, 562, L + 68, 742), name='rule', kind='deco'))
+    add_text('аварийное оборудование, подлежащее демонтажу,', 'R', 56, L + 110, 622, word_t('08', 1, 'аварийное') - 0.2, end,
              INK, inside=card)
-    add_text('демонтируют без установки нового взамен', 'D', 64, L + 110, 735, word_t('08', 1, 'демонтируют') - 0.2, end,
+    add_text('демонтируют без установки нового взамен', 'D', 64, L + 110, 714, word_t('08', 1, 'демонтируют') - 0.2, end,
              NAVY, inside=card)
 
 
 def sc_09():
     c1, c2, end = cut('09a'), cut('09b'), cut('10a')
     kicker('Если собрание примет все четыре вопроса', c1, end)
-    title('Для квартиры 41' + NB + 'м²', word_t('09', 0, 'для квартиры') - 0.3, end)
+    title('Для квартиры 41' + NB + 'м²', c1 + 0.55, end)
     vals = [('8', '3' + NB + '482,54'), ('10', '4' + NB + '508,36'), ('11', '8' + NB + '492,74'), ('12', '1' + NB + '538,32')]
     gw = (R - L - 30) / 2
     for i, (q, v) in enumerate(vals):
         x = L + (i % 2) * (gw + 30); y = 370 + (i // 2) * 150
-        ti = c1 + 0.7 + 0.12 * i
+        ti = c1 + 0.8 + 0.12 * i
         cd = add_card(x, y, gw, 130, ti, c2, name='sum-tile')
         add_text('Вопрос ' + q, 'R', 56, x + 44, y + 85, ti + 0.05, c2, MUTED, inside=cd)
         add_text(v + NB + '₽', 'D', 64, x + gw - 44, y + 87, ti + 0.08, c2, NAVY, 'r', inside=cd)
@@ -563,20 +568,20 @@ def sc_09():
 
     def drule(ctx, t, a, dy):
         k = ease_out((t - ts) / 0.7)
-        rrect(ctx, L, 700, (R - L) * k, 4, 2); ctx.set_source_rgba(*NAVY, a); ctx.fill()
-    ELS.append(El(drule, ts, c2, 0.2, 0.3, 0, box=(L, 700, R, 704), name='sumrule'))
-    lab = Text('Общая сумма', 'R', 56, L, 800, MUTED)
-    LAB_B = 395
+        rrect(ctx, L, 668, (R - L) * k, 4, 2); ctx.set_source_rgba(*NAVY, a); ctx.fill()
+    ELS.append(El(drule, ts, c2, 0.2, 0.3, 0, box=(L, 668, R, 672), name='sumrule'))
+    lab = Text('Общая сумма', 'R', 56, L, 766, MUTED)
+    LAB_B = 434
     big = Text('18' + NB + '021,96' + NB + '₽', 'B', 170, L, 0, NAVY)
     sA = 100 / 170
-    yA, yB = 806, 545
-    xA = R - big.width * sA
+    yA, yB = 770, 594
+    xA = R - (big.bbox()[2] - L) * sA   # align the ink edge to the right margin
 
     def dlab(ctx, t, a, dy):
         k = ease_io((t - (c2 - 0.2)) / 0.7)
-        lab.draw(ctx, a, 0, dy + lerp(0, LAB_B - 800, k))
+        lab.draw(ctx, a, 0, dy + lerp(0, LAB_B - 766, k))
     e = El(dlab, ts + 0.1, end, 0.5, 0.3, 18, box=lab.bbox(), name='sumlabel'); lb = lab.bbox()
-    e.boxes = [(0, c2 - 0.2, lb), (c2 - 0.2, 1e9, (lb[0], lb[1] + LAB_B - 800, lb[2], lb[3] + LAB_B - 800))]; ELS.append(e)
+    e.boxes = [(0, c2 - 0.2, lb), (c2 - 0.2, 1e9, (lb[0], lb[1] + LAB_B - 766, lb[2], lb[3] + LAB_B - 766))]; ELS.append(e)
 
     def dbig(ctx, t, a, dy):
         k = ease_io((t - (c2 - 0.2)) / 0.7)
@@ -589,21 +594,19 @@ def sc_09():
     e.boxes = [(0, c2 - 0.2, (xA + (bb[0] - L) * sA, yA + bb[1] * sA, xA + (bb[2] - L) * sA, yA + bb[3] * sA)), (c2 - 0.2, 1e9, e.box)]
     ELS.append(e)
     accent_bar((L, yB + bb[1], L + big.width, yB + bb[3]), c2 + 0.5, end)
-    add_text('Взнос на распределители в этот расчёт не входит', 'M', 60, L, 660, seg_t('09', 1) - 0.25, end, NAVY)
-    add_lines(wrap('Он зависит от количества радиаторов и выбранного варианта', 'R', 56, 1100), 'R', 56, L, 742, 72,
-              seg_t('09', 2) - 0.25, end, MUTED)
+    add_text('Взнос на распределители в этот расчёт не входит', 'M', 60, L, 732, seg_t('09', 1) - 0.25, end, NAVY)
 
 
 def sc_10():
     c1, c2, c3, end = cut('10a'), cut('10b'), cut('10c'), cut('11')
     kicker('В указанные ставки включены', c1, c2)
-    title('Материалы и работы', c1 + 0.45, c2)
+    title('Материалы и работы', c1 + 0.1, c2)
     t1 = seg_t('10', 1) - 0.3
     card = add_card(L, 400, R - L, 220, t1, c2, name='fixed')
     add_icon('lock', L + 56, 468, 80, t1 + 0.05, c2)
     add_text('По проекту решения', 'R', 56, L + 180, 488, t1 + 0.1, c2, MUTED, inside=card)
     add_text('стоимость работ фиксирована', 'D', 64, L + 180, 570, t1 + 0.16, c2, NAVY, inside=card)
-    kicker('Если стоимость материалов', c2, end)
+    kicker('По проекту решения: если стоимость материалов', c2, end)
     for ic, head, body, ti, to in [
             ('down', 'Обоснованно снизится',
              'Разница между начисленным взносом и фактическими затратами подлежит возврату собственникам', c2, c3),
@@ -619,7 +622,7 @@ def sc_10():
 def sc_11():
     c1, end = cut('11'), cut('12')
     kicker('Материалы собрания', c1, end)
-    title('Сметы и предложения', c1 + 0.45, end)
+    title('Сметы и предложения', c1 + 0.1, end)
     t1 = seg_t('11', 1) - 0.25
     add_icon('pin', L, 418, 64, t1, end)
     add_text('Офис управляющей компании', 'M', 60, L + 100, 470, t1 + 0.05, end, INK)
@@ -644,51 +647,64 @@ def sc_12():
 
 
 def sc_13():
-    c1, c2, end = cut('13a'), cut('13b'), TOTAL + 1
+    c1, c2 = cut('13a'), cut('13b')
+    last = ITEMS['13b']['t1']
+    endcard = min(b for b in TL['beats'] if b >= last + 3.0)   # info holds >3 s after the last word, then the brand card
+    end = endcard
     kicker('Голосование', c1, end)
-    ly = 268
-    nodes = [(L + 14, '16' + NB + 'октября', 'l'), ((L + R) / 2, '20' + NB + 'октября', 'c'), (R - 14, '31' + NB + 'января 2027', 'r')]
+    ly = 262
+    nodes = [L + 14, 760, R - 14]
+    labs = [Text('16' + NB + 'октября', 'D', 56, L, ly + 76, MUTED),
+            Text('20' + NB + 'октября · очная часть', 'D', 56, 746, ly + 76, MUTED),
+            Text('31' + NB + 'января', 'D', 56, R, ly + 76, MUTED, 'r')]
+
+    def act(i, t):
+        if i == 0: return 1 - ease_io((t - c2) / 0.5)
+        if i == 2: return ease_io((t - c2 - 0.9) / 0.4)
+        return 0
 
     def dline(ctx, t, a, dy):
         rrect(ctx, L, ly - 2 + dy, R - L, 4, 2); ctx.set_source_rgba(*RULE, a); ctx.fill()
         k = ease_io((t - (c2 + 0.1)) / 1.0)
         if k > 0:
             rrect(ctx, L, ly - 3 + dy, (R - L) * k, 6, 3); ctx.set_source_rgba(*NAVY, a); ctx.fill()
-        for i, (x, _, _) in enumerate(nodes):
-            act = (1 - ease_io((t - c2) / 0.5)) if i == 0 else (ease_io((t - c2 - 0.9) / 0.4) if i == 2 else 0)
+        for i, x in enumerate(nodes):
+            ac = act(i, t)
             ctx.arc(x, ly + dy, 13, 0, 2 * math.pi); ctx.set_source_rgba(*WHITE, a); ctx.fill_preserve()
-            ctx.set_source_rgba(*NAVY, a * (0.45 + 0.55 * act)); ctx.set_line_width(4); ctx.stroke()
-            if act > 0:
-                ctx.arc(x, ly + dy, 9 * act, 0, 2 * math.pi); ctx.set_source_rgba(*NAVY, a); ctx.fill()
-    ELS.append(El(dline, c1 + 0.1, end, 0.6, 0.3, 0, box=(L, ly - 13, R, ly + 13), name='timeline', kind='group'))
-    labs = [Text(tx, 'D', 56, {'l': L, 'c': x, 'r': R}[al], ly + 82, NAVY, al) for x, tx, al in nodes]
+            ctx.set_source_rgba(*(NAVY if ac > 0 or i == 2 and k > 0.95 else MUTED), a); ctx.set_line_width(4); ctx.stroke()
+            if ac > 0:
+                ctx.arc(x, ly + dy, 9 * ac, 0, 2 * math.pi); ctx.set_source_rgba(*NAVY, a); ctx.fill()
+    ELS.append(El(dline, c1 + 0.1, end, 0.5, 0.2, 0, box=(L, ly - 13, R, ly + 13), name='timeline', kind='group'))
 
     def dlabs(ctx, t, a, dy):
         for i, o in enumerate(labs):
-            act = (1 - ease_io((t - c2) / 0.5)) if i == 0 else (ease_io((t - c2 - 0.9) / 0.4) if i == 2 else 0)
-            o.color = NAVY if act > 0.5 else MUTED
-            o.draw(ctx, a * (0.55 + 0.45 * act), 0, dy)
-    ELS.append(El(dlabs, c1 + 0.2, end, 0.6, 0.3, 14, box=(L, labs[0].bbox()[1], R, labs[0].bbox()[3]), name='tl-labels', kind='group'))
+            o.color = NAVY if act(i, t) > 0.5 else MUTED
+            o.draw(ctx, a, 0, dy)
+    ELS.append(El(dlabs, c1 + 0.2, end, 0.5, 0.2, 14, box=(L, labs[0].bbox()[1], R, labs[0].bbox()[3]), name='tl-labels', kind='group'))
     for o in labs:
         ELS.append(El(lambda *a: None, c1 + 0.2, end, box=o.bbox(), name='tl-' + o.txt[:6]))
     t0 = seg_t('13', 0) - 0.3
-    add_text('Голосование начинается', 'M', 60, L, 480, t0, c2, MUTED)
-    add_text('16' + NB + 'октября', 'B', 150, L, 640, t0 + 0.1, c2, NAVY)
+    add_text('Голосование начинается', 'M', 60, L, 450, t0, c2, MUTED)
+    add_text('16' + NB + 'октября', 'B', 150, L, 610, t0 + 0.1, c2, NAVY)
     t1 = seg_t('13', 1) - 0.25
-    add_text('Приём решений завершается', 'M', 60, L, 470, t1, end, MUTED)
-    add_text('31' + NB + 'января 2027, 18:00', 'B', 112, L, 590, t1 + 0.1, end, NAVY)
+    add_text('Приём решений завершается', 'M', 60, L, 450, t1, end, MUTED)
+    add_text('31' + NB + 'января 2027, 18:00', 'B', 112, L, 565, t1 + 0.1, end, NAVY)
     t2 = seg_t('13', 2) - 0.25
-    add_icon('clock', L, 643, 56, t2, end)
-    add_text('В офис — заранее, в часы работы: пн–пт, 09:00–18:00', 'M', 56, L + 84, 690, t2 + 0.05, end, INK)
+    add_icon('clock', L, 614, 56, t2, end)
+    add_text('В офис — заранее, в часы работы: пн–пт, 09:00–18:00', 'M', 56, L + 84, 661, t2 + 0.05, end, INK)
     t3 = seg_t('13', 3) - 0.25
-    add_icon('cal', L, 735, 56, t3, end)
-    add_text('Последний день голосования — воскресенье', 'R', 56, L + 84, 782, t3 + 0.05, end, MUTED)
-    # brand mark returns at the finale
-    last = ITEMS['13b']['t1']
+    add_icon('cal', L, 700, 56, t3, end)
+    add_text('Последний день голосования — воскресенье', 'R', 56, L + 84, 747, t3 + 0.05, end, MUTED)
+    # brand card at the finale, same lockup as the opening
     logo = ASSETS + 'petersburg_dom_transparent.png'
-    rect = fit(logo, (R - 300, 70, 300, 150)); rect = (R - rect[2], rect[1], rect[2], rect[3])
-    ELS.append(El(lambda ctx, t, a, dy: draw_img(ctx, logo, (rect[0], rect[1] + dy, rect[2], rect[3]), a),
-                  last + 0.9, end, 0.9, 0.3, 10, box=(rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]), name='logo-end'))
+    rect = fit(logo, LOGO_BOX)
+
+    def dlogo(ctx, t, a, dy):
+        k = ease_out((t - endcard) / 1.0); sc = 0.97 + 0.03 * k
+        x, y, w, h = rect; cx, cy = x + w / 2, y + h / 2
+        draw_img(ctx, logo, (cx - w * sc / 2, cy - h * sc / 2, w * sc, h * sc), a, ref=rect)
+    ELS.append(El(dlogo, endcard, TOTAL + 1, 0.8, 0.2, 0, box=(rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]), name='logo-end'))
+    add_text('dombalt.ru', 'D', 64, 960, 670, endcard + 0.35, TOTAL + 1, NAVY, 'c')
 
 
 def build():
@@ -715,7 +731,7 @@ def cues():
     # merge short neighbours within one screen state
     m = []
     for c in out:
-        if m and c[3] == m[-1][3] and c[0] - m[-1][1] < 0.45 and len(m[-1][2]) + len(c[2]) <= 84 and c[1] - m[-1][0] <= 7.5:
+        if m and c[3] == m[-1][3] and not m[-1][2].endswith('.') and c[0] - m[-1][1] < 0.45 and len(m[-1][2]) + len(c[2]) <= 84 and c[1] - m[-1][0] <= 7.5:
             m[-1] = [m[-1][0], c[1], m[-1][2] + ' ' + c[2], c[3]]
         else:
             m.append(list(c))

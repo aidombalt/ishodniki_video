@@ -6,7 +6,8 @@ from scipy.signal import resample_poly
 SR = 48000
 W = '/tmp/claude-0/-home-user-ishodniki-video/7fdd3399-3b0b-583b-a74f-2847502fb422/scratchpad/work/'
 LEAD = 0.6          # speech starts this long after the cut
-REMOVE = [(24, 28), (104, 112)]   # bar ranges removed from the track [a, b)
+KEEP = [(0, 27), (31, 102), (112, 118), (116, None)]   # original bar ranges played in order (12 bars out, 2 sparse bars looped)
+BEAT_OFFSET = 0.062   # tracked grid sat between 16ths; kick/snare land 62 ms later
 
 ITEMS = [('logo', None, 'start'),
  ('01rad', ('01', 0, 0), 'intra'), ('01main', ('01', 1, 3), 'intra'),
@@ -51,17 +52,41 @@ def onset(x, t):
     return (i0 + np.argmax(d)) / SR
 
 
+def kweight(x):
+    from scipy.signal import lfilter
+    y = lfilter([1.53512485958697, -2.69169618940638, 1.19839281085285], [1, -1.69065929318241, 0.73248077421585], x)
+    return lfilter([1.0, -2.0, 1.0], [1, -1.99004745483398, 0.99007225036621], y)
+
+
+def ride_gain(m, target, tl, total):
+    """slow gain so the music's short-term loudness (3 s, dual-mono stereo) sits at target; frozen in the final pause"""
+    y = kweight(m) ** 2
+    hop = SR // 10; win = 3 * SR
+    c = np.concatenate([[0], np.cumsum(y)])
+    centers = np.arange(0, len(m), hop)
+    ms = np.array([(c[min(len(m), i + win // 2)] - c[max(0, i - win // 2)]) / win for i in centers])
+    st = -0.691 + 10 * np.log10(2 * ms + 1e-12)
+    g = target - st
+    base = np.median(g[len(g) // 10: -len(g) // 10])
+    g = base + np.clip(g - base, -6, 6)   # ride at most +-6 dB around the overall trim
+    k = 21; g = np.convolve(np.pad(g, k // 2, mode='edge'), np.ones(k) / k, 'valid')
+    last = [d for d in tl if d['kind'] != 'start'][-1]['t1']
+    g[centers / SR > last] = g[np.searchsorted(centers / SR, last) - 1]
+    gs = np.interp(np.arange(len(m)), centers, g)
+    return 10 ** (gs / 20)
+
+
 def edit_music():
     x = rd(W + 'music48.wav')
-    beats = np.array(json.load(open(W + 'beats_s.json')))
+    beats = np.array(json.load(open(W + 'beats_s.json'))) + BEAT_OFFSET
     db = beats[0::4]
-    keep, prev = [], 0.0
-    for a, b in REMOVE:
-        keep.append((prev, onset(x, db[a])))
-        prev = onset(x, db[b])
-    keep.append((prev, len(x) / SR))
+    keep = []
+    for a, b in KEEP:
+        s0 = 0.0 if a == 0 else onset(x, db[a])
+        s1 = len(x) / SR if b is None else onset(x, db[b])
+        keep.append((s0, s1))
     xf = int(0.02 * SR); pre = int(0.003 * SR)
-    out = np.zeros(0); bmap = []
+    out = np.zeros(0); bmap = []; seen = set()
     for k, (s, e) in enumerate(keep):
         i0 = int(s * SR) - pre - (xf if k else 0)
         i1 = int(e * SR) - pre if k < len(keep) - 1 else len(x)
@@ -76,8 +101,8 @@ def edit_music():
         else:
             out = seg
         for bi, bt in enumerate(beats):
-            if s - 0.01 <= bt < e - 0.01:
-                bmap.append((bt + offset, bi))
+            if s - 0.08 <= bt < e - 0.08:
+                bmap.append((bt + offset, bi if bi not in seen else -1)); seen.add(bi)
     return out, bmap
 
 
@@ -96,6 +121,8 @@ def build(beats, force=None, extra=None):
         else:
             lo, hi = RANGE[kind]
             cand = [b for b in beats if lo <= b[0] + LEAD - t_end <= hi]
+            if not cand:   # window narrower than a beat: take the nearest beat
+                cand = sorted(beats, key=lambda b: abs(b[0] + LEAD - t_end - TARGET[kind]))[:1]
             if kind == 'scene' and [c for c in cand if c[1] % 2 == 0]:
                 cand = [c for c in cand if c[1] % 2 == 0]
             tgt = TARGET[kind] + extra.get(name, 0)
@@ -140,12 +167,12 @@ def main():
     # musical landmarks after the edit
     lm = {ob: t for t, ob in bmap}
     db = lambda bar: lm[bar * 4]
-    force = {'07b': None, '08': db(71), '09a': db(77)}
-    # 07b: one beat later than greedy so that 08 lands on the breakdown downbeat
-    tl, _ = build(bmap, {'08': db(71), '09a': db(77)})
+    # scene cuts that should coincide with musical events / music edit points
+    base = {'04a': db(31), '08': db(71), '09a': db(77), '12': db(112)}
+    tl, _ = build(bmap, base)
     c07 = [d for d in tl if d['name'] == '07b'][0]['cut']
     later = [t for t, _ in bmap if t > c07 + 0.3][0]
-    force = {'07b': later, '08': db(71), '09a': db(77)}
+    force = dict(base, **{'07b': later})
     tail = db(125)
     extra = {}
     for it in range(12):
@@ -169,15 +196,14 @@ def main():
     for d in tl:
         if d['kind'] != 'start':
             speech[int(d['t0'] * SR):int(d['t1'] * SR)] = True
-    mu = m[speech]
-    g_under = 10 ** ((-15.5 - 12.5 - lufs(mu)) / 20)
+    g_under = ride_gain(m, -15.5 - 12.5, tl, total)
     # duck envelope: +3 dB in pauses longer than 1 s, smooth ramps
     lift = np.zeros(n)
     t = np.arange(n) / SR
     spans = [(d['t0'], d['t1']) for d in tl if d['kind'] != 'start']
     pauses = [(0, spans[0][0])] + [(spans[i][1], spans[i + 1][0]) for i in range(len(spans) - 1)] + [(spans[-1][1], total)]
     for a, b in pauses:
-        if b - a < 1.0:
+        if b - a < 1.5:
             continue
         up0, up1 = a + 0.25, a + 0.75
         dn0, dn1 = b - 0.55, b - 0.1
@@ -187,8 +213,16 @@ def main():
             dn0 = dn1 = total + 1
         env = np.clip(np.minimum((t - up0) / max(up1 - up0, 1e-3), (dn1 - t) / max(dn1 - dn0, 1e-3)), 0, 1)
         env[(t < up0) | (t > dn1)] = 0
-        lift = np.maximum(lift, 0.5 - 0.5 * np.cos(np.pi * env))
-    gm = g_under * 10 ** (3.0 * lift / 20)
+        # rise amount per pause: music level in the pause vs the 3 s under the preceding speech stays <= 3 dB
+        km = kweight(m * g_under) ** 2
+        Lk = lambda i0, i1: 10 * np.log10(km[max(i0, 0):max(i1, i0 + 1)].mean() + 1e-12)
+        if a > 0 and b < total - 0.01:
+            r0 = Lk(int((a + 0.8) * SR), int((b - 0.6) * SR)) - Lk(int((a - 3) * SR), int(a * SR))
+        else:
+            r0 = 0.0
+        amt = float(np.clip(2.8 - r0, 0, 2.8))
+        lift = np.maximum(lift, amt * (0.5 - 0.5 * np.cos(np.pi * env)))
+    gm = g_under * 10 ** (lift / 20)
     # gentle fade at the very end
     fo = int(1.6 * SR); gm[-fo:] *= np.linspace(1, 0, fo) ** 1.5
     mus = m * gm
@@ -207,6 +241,7 @@ def main():
         mix = resample_poly(y * gr, 1, 4)[:n]
     print('mix I=%.2f  TP=%.2f  voice I=%.2f  music-under=%.2f  music-pause-lift=3dB' %
           (lufs(mix), true_peak_db(mix), lufs(v), lufs(mus[speech])))
+    np.save(W + 'stem_v.npy', v.astype(np.float32)); np.save(W + 'stem_m.npy', mus.astype(np.float32))
     st = np.stack([mix, mix], 1).astype(np.float32)
     wavfile.write(W + 'mix.wav', SR, st)
     json.dump(dict(timeline=tl, total=total, beats=[t for t, _ in bmap if t < total],

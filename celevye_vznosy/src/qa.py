@@ -2,7 +2,8 @@ import json, subprocess, numpy as np, sys
 from PIL import Image
 W = '/tmp/claude-0/-home-user-ishodniki-video/7fdd3399-3b0b-583b-a74f-2847502fb422/scratchpad/'
 tl = json.load(open(W + 'work/timeline.json')); st = json.load(open(W + 'work/framestats.json'))
-cuts = [d['cut'] for d in tl['timeline']]
+last = tl['timeline'][-1]['t1']
+cuts = [d['cut'] for d in tl['timeline']] + [min(b for b in tl['beats'] if b >= last + 3.0)]   # + brand end card
 t = np.array([s[0] for s in st]); lum = np.array([s[1] for s in st]); dif = np.array([s[2] for s in st])
 probs = []
 for i in range(1, len(t)):
@@ -18,7 +19,7 @@ names = [d['name'] for d in tl['timeline']]
 for i, d in enumerate(tl['timeline']):
     nxt = tl['timeline'][i + 1]['cut'] if i + 1 < len(tl['timeline']) else tl['total']
     moments.append((d['name'], round(min(d.get('t1', d['cut'] + 2.5) - 0.3, nxt - 0.4), 2)))
-moments.append(('final', round(tl['total'] - 0.2, 2)))
+moments[-1] = ('13b', round(last + 2.5, 2)); moments.append(('endcard', round(tl['total'] - 0.2, 2)))
 for name, w, cols in (('sheet640.jpg', 640, 4), ('sheet390.jpg', 390, 4)):
     h = int(w * 9 / 16); ims = []
     for n, tt in moments:
