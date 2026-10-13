@@ -8,9 +8,21 @@ W = '/tmp/claude-0/-home-user-ishodniki-video/7fdd3399-3b0b-583b-a74f-2847502fb4
 LEAD = 0.6          # speech starts this long after the cut
 import os
 HAS14 = os.path.exists(W + 'vo/14.wav')   # reassurance line after the total
-KEEP = [(0, 27), (31, 102), (112, 118), (116, None)]   # original bar ranges played in order (12 bars out, 2 sparse bars looped)
-if HAS14:   # 5 bars of the kick-less breakdown under the new block; the groove comes back on the cut to 09b
-    KEEP = [(0, 27), (31, 82), (36, 39), (38, 40), (82, 102), (112, 118), (116, None)]
+HAS15 = os.path.exists(W + 'vo/15.wav')   # closing call to vote on the brand card
+
+
+def plan(c_end=102, sparse_extra=2):
+    """original bar ranges played in order. Groove C runs to bar c_end, the quiet section is stretched or
+    shortened by sparse_extra bars (looping bars 116-117), then dip, final groove and the final chord."""
+    k = [(0, 27), (31, 82 if HAS14 else c_end)]
+    if HAS14:   # 5 bars of the kick-less breakdown under the block after the total; groove returns on 09b
+        k += [(36, 39), (38, 40), (82, c_end)]
+    if sparse_extra >= 0:   # bars may come in halves (2 beats)
+        whole = int(sparse_extra // 2); rest = sparse_extra - 2 * whole
+        k += [(112, 118)] + [(116, 118)] * whole + ([(118 - rest, 118)] if rest else []) + [(118, None)]
+    else:
+        k += [(112, 118 + sparse_extra), (118, None)]
+    return k
 BEAT_OFFSET = 0.062   # tracked grid sat between 16ths; kick/snare land 62 ms later
 
 ITEMS = [('logo', None, 'start'),
@@ -22,10 +34,10 @@ ITEMS = [('logo', None, 'start'),
  ('06a', ('06', 0, 1), 'scene'), ('06b', ('06', 2, 6), 'intra'),
  ('07a', ('07', 0, 1), 'scene'), ('07b', ('07', 2, 3), 'intra'),
  ('08', ('08', 0, 1), 'scene'),
- ('09a', ('09', 0, 0), 'scene'), ('09n', ('14', 0, 2), 'intra'), ('09b', ('09', 1, 2), 'intra'),
+ ('09a', ('09', 0, 0), 'scene'), ('09n', ('14', 0, -1), 'intra'), ('09b', ('09', 1, 2), 'intra'),
  ('10a', ('10', 0, 1), 'scene'), ('10b', ('10', 2, 2), 'intra'), ('10c', ('10', 3, 3), 'intra'),
- ('11', ('11', 0, 1), 'scene'), ('12', ('12', 0, 3), 'scene'),
- ('13a', ('13', 0, 0), 'scene'), ('13b', ('13', 1, 3), 'intra')]
+ ('11', ('11', 0, -1), 'scene'), ('12', ('12', 0, 3), 'scene'),
+ ('13a', ('13', 0, 0), 'scene'), ('13b', ('13', 1, 3), 'intra'), ('15', ('15', 0, -1), 'scene')]
 RANGE = {'intra': (1.0, 2.0), 'scene': (2.0, 2.55)}
 TARGET = {'intra': 1.4, 'scene': 2.25}
 
@@ -80,14 +92,15 @@ def ride_gain(m, target, tl, total):
     return 10 ** (gs / 20)
 
 
-def edit_music():
+def edit_music(KEEP):
     x = rd(W + 'music48.wav')
     beats = np.array(json.load(open(W + 'beats_s.json'))) + BEAT_OFFSET
     db = beats[0::4]
     keep = []
+    at = lambda bar: beats[int(round(bar * 4))]   # bars may be fractional (half bars)
     for a, b in KEEP:
-        s0 = 0.0 if a == 0 else onset(x, db[a])
-        s1 = len(x) / SR if b is None else onset(x, db[b])
+        s0 = 0.0 if a == 0 else onset(x, at(a))
+        s1 = len(x) / SR if b is None else onset(x, at(b))
         keep.append((s0, s1))
     xf = int(0.02 * SR); pre = int(0.003 * SR)
     out = np.zeros(0); bmap = []; seen = set(); starts = []
@@ -135,6 +148,7 @@ def build(beats, force=None, extra=None):
             tgt = TARGET[kind] + extra.get(name, 0)
             cut = min(cand, key=lambda c: abs(c[0] + LEAD - t_end - tgt))[0]
         f, s0, s1 = clip
+        if s1 < 0: s1 = len(segs[f]) - 1   # whole take, however many phrases it has
         a, b = segs[f][s0][0], segs[f][s1][1]
         t0 = cut + LEAD
         d = dict(name=name, kind=kind, cut=float(cut), vo=f, segs=[s0, s1], a=a, b=b, t0=t0, t1=t0 + b - a,
@@ -145,10 +159,20 @@ def build(beats, force=None, extra=None):
     return tl, t_end
 
 
+def high_shelf(x, f0, gain_db, q=0.707):
+    from scipy.signal import lfilter
+    A = 10 ** (gain_db / 40); w0 = 2 * np.pi * f0 / SR; al = np.sin(w0) / (2 * q); c = np.cos(w0)
+    b = [A * ((A + 1) + (A - 1) * c + 2 * np.sqrt(A) * al), -2 * A * ((A - 1) + (A + 1) * c), A * ((A + 1) + (A - 1) * c - 2 * np.sqrt(A) * al)]
+    a = [(A + 1) - (A - 1) * c + 2 * np.sqrt(A) * al, 2 * ((A - 1) - (A + 1) * c), (A + 1) - (A - 1) * c - 2 * np.sqrt(A) * al]
+    return lfilter(np.array(b) / a[0], np.array(a) / a[0], x)
+
+
 def voice_stem(tl, total):
     segs = json.load(open(W + 'segs.json'))
     files = {}
-    for k in range(1, 15 if HAS14 else 14):
+    for k in range(1, 16):
+        if not os.path.exists(W + 'vo/%02d.wav' % k):
+            continue
         f = '%02d' % k
         x = rd(W + 'vo/%s.wav' % f)
         files[f] = x * 10 ** ((-18.6 - lufs(x)) / 20)   # equalise takes
@@ -169,28 +193,51 @@ def voice_stem(tl, total):
 
 
 def main():
-    m, bmap, starts = edit_music()
-    wavfile.write(W + 'music_edit.wav', SR, m.astype(np.float32))
-    # musical landmarks after the edit
-    lm = {ob: t for t, ob in bmap}
-    db = lambda bar: lm[bar * 4]
-    # scene cuts that should coincide with musical events / music edit points
-    base = {'04a': db(31), '08': db(71), '09a': db(77), '12': db(112)}
-    if HAS14:
-        base.update({'09n': starts[2], '09b': starts[4]})
+    def landmarks(bmap, starts, keep):
+        lm = {}
+        for t, ob in bmap:
+            lm.setdefault(ob, t)
+        db = lambda bar: lm[bar * 4]
+        idx = {r: i for i, r in enumerate(keep)}
+        base = {'04a': db(31), '08': db(71), '09a': db(77)}
+        if HAS14:
+            base.update({'09n': starts[idx[(36, 39)]], '09b': starts[idx[(82, keep[idx[(36, 39)] + 2][1])]]})
+        return db, base
+    # pass 1: natural speech timing after 09b decides how much groove and quiet music is needed
+    keep = plan()
+    m, bmap, starts = edit_music(keep)
+    db, base = landmarks(bmap, starts, keep)
     tl, _ = build(bmap, base)
     c07 = [d for d in tl if d['name'] == '07b'][0]['cut']
-    later = [t for t, _ in bmap if t > c07 + 0.3][0]
-    force = dict(base, **{'07b': later})
+    base['07b'] = [t for t, _ in bmap if t > c07 + 0.3][0]
+    tl, t_end = build(bmap, base)
+    cut = {d['name']: d['cut'] for d in tl}
+    t_from = cut['09b'] if HAS14 else cut['09a']
+    bar_c = 2.257; bar_s = 2.29
+    half = lambda x: round(2 * x) / 2
+    c_end = min(82 + half((cut['12'] - t_from) / bar_c), 112) if HAS14 else min(80 + half((cut['12'] - db(80)) / bar_c), 112)
+    quiet_bars = half((t_end + 0.4 - cut['12']) / bar_s)    # bars from the quiet section to the final chord
+    keep = plan(c_end, quiet_bars - 13)
+    m, bmap, starts = edit_music(keep)
+    wavfile.write(W + 'music_edit.wav', SR, m.astype(np.float32))
+    db, base = landmarks(bmap, starts, keep)
+    base['07b'] = [t for t, _ in bmap if t > c07 + 0.3][0]
+    base['12'] = db(112)
     tail = db(125)
-    extra = {}
-    for it in range(12):
-        tl, t_end = build(bmap, force, extra)
-        gap = tail - t_end
-        if gap < 0.3:
+    print('music plan', keep)
+    # pass 2: spread the small residuals over the neighbouring pauses so the anchored cuts stay in range
+    extra = {'15': 0.25} if HAS15 else {}
+    pre12, post12 = ['10a', '10b', '10c', '11'], ['13a', '13b'] + (['15'] if HAS15 else [])
+    for it in range(30):
+        tl, t_end = build(bmap, base, extra)
+        d = {x['name']: x for x in tl}
+        p12 = d['12']['pause']
+        r1 = 0 if 2.0 <= p12 <= 2.5 else (2.25 - p12)
+        r2 = (tail - 0.4) - t_end
+        if abs(r1) < 0.05 and abs(r2) < 0.3:
             break
-        for n in ['10a', '11', '12', '13a', '10b', '10c', '13b', '09b']:
-            extra[n] = extra.get(n, 0) + 0.12
+        for n in pre12: extra[n] = extra.get(n, 0) - r1 / len(pre12) * 0.5
+        for n in post12: extra[n] = extra.get(n, 0) + r2 / len(post12) * 0.5
     total = round((t_end + 6.8) * 25) / 25
     print('tail start %.2f, last word %.2f, end %.2f, music len %.2f' % (tail, t_end, total, len(m) / SR))
     for d in tl:

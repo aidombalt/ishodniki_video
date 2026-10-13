@@ -90,13 +90,13 @@ def tmask(txt, w, s):
     return res
 
 
-PREP = set('в во на и а о об с со по из для к у не за от до без при что как но или же — его её их'.split())
+PREP = set('в во на и а о об с со по из для к у не за от до без при что как но или же его её их'.split())
 
 
 def wrap(txt, w, s, maxw):
     """fewest lines that fit, then the most even split; never end a line on a preposition"""
     words = txt.split(' ')
-    def ok_break(i): return words[i - 1].lower() not in PREP
+    def ok_break(i): return words[i - 1].lower() not in PREP and words[i] != '—'   # a dash never starts a line
     best = None
     def rec(start, n):
         if n == 1:
@@ -236,6 +236,9 @@ def icon(ctx, kind, x, y, s, color, a):
         else:
             ctx.move_to(32, 47); ctx.line_to(32, 18); ctx.move_to(21, 28); ctx.line_to(32, 17); ctx.line_to(43, 28)
         ctx.stroke()
+    elif kind == 'user':
+        ctx.arc(32, 22, 11, 0, 2 * math.pi); ctx.stroke()
+        ctx.move_to(10, 58); ctx.curve_to(10, 42, 20, 36, 32, 36); ctx.curve_to(44, 36, 54, 42, 54, 58); ctx.stroke()
     elif kind == 'lock':
         rrect(ctx, 12, 28, 40, 30, 6); ctx.stroke()
         ctx.move_to(20, 28); ctx.line_to(20, 20); ctx.arc(32, 20, 12, math.pi, 0); ctx.line_to(44, 28); ctx.stroke()
@@ -383,7 +386,7 @@ def sc_01():
         def d(ctx, t, a, dy, x=x, y=y, w=w, h=h, i=i):
             rrect(ctx, x, y + dy, w, h, 28); ctx.set_source_rgba(*LIGHT, a); ctx.fill()
             draw_img(ctx, TILES[i], fit(TILES[i], (x + 18, y + 14 + dy, w - 36, h - 28)), a)
-        ELS.append(El(d, c2 + 0.25 + 0.1 * i, end, 0.55, 0.3, 26, box=(x, y, x + w, y + h), kind='card', name='tile'))
+        ELS.append(El(d, seg_t('01', 2) - 1.2 + 0.15 + 0.1 * i, end, 0.55, 0.3, 26, box=(x, y, x + w, y + h), kind='card', name='tile'))
     kicker('Ещё одна часть повестки', c2, end)
     t_title = seg_t('01', 2) - 1.2
     title('Целевые взносы', t_title, end)
@@ -601,8 +604,8 @@ def sc_09():
     ny = 700 if has_n else 732
     if has_n:
         add_text('Это не ежемесячная плата, а разовые взносы', 'M', 60, L, ny, seg_t('14', 0) - 0.25, c2, NAVY)
-        add_text('Сумма зависит от того, какие вопросы примет собрание', 'R', 56, L, ny + 74,
-                 seg_t('14', len(SEGS['14']) - 1) - 0.25, c2, MUTED)
+        add_text('Итог определит собрание: по каждому вопросу отдельно', 'R', 56, L, ny + 74,
+                 seg_t('14', 2) - 0.25, c2, MUTED)
     add_text('Взнос на распределители в этот расчёт не входит', 'M', 60, L, ny, seg_t('09', 1) - 0.25, end, NAVY)
 
 
@@ -633,12 +636,12 @@ def sc_11():
     kicker('Материалы собрания', c1, end)
     title('Сметы и предложения', c1 + 0.1, end)
     t1 = seg_t('11', 1) - 0.25
-    add_icon('pin', L, 418, 64, t1, end)
-    add_text('Офис управляющей компании', 'M', 60, L + 100, 470, t1 + 0.05, end, INK)
-    add_text('с торца 3-й парадной', 'R', 56, L + 100, 548, t1 + 0.12, end, MUTED)
-    t2 = word_t('11', 1, 'и на её сайте') - 0.25
-    add_icon('web', L, 628, 64, t2, end)
-    add_text('dombalt.ru', 'D', 64, L + 100, 682, t2 + 0.05, end, NAVY)
+    add_icon('user', L, 418, 64, t1, end)
+    add_text('Личный кабинет ELSA', 'M', 60, L + 100, 470, t1 + 0.05, end, INK)
+    t2 = word_t('11', 2, 'или в офисе') - 0.25
+    add_icon('pin', L, 548, 64, t2, end)
+    add_text('Офис управляющей компании', 'M', 60, L + 100, 600, t2 + 0.05, end, INK)
+    add_text('с торца 3-й парадной', 'R', 56, L + 100, 676, t2 + 0.12, end, MUTED)
 
 
 def sc_12():
@@ -658,7 +661,7 @@ def sc_12():
 def sc_13():
     c1, c2 = cut('13a'), cut('13b')
     last = ITEMS['13b']['t1']
-    endcard = min(b for b in TL['beats'] if b >= last + 3.0)   # info holds >3 s after the last word, then the brand card
+    endcard = cut('15') if '15' in ITEMS else min(b for b in TL['beats'] if b >= last + 3.0)
     end = endcard
     kicker('Голосование', c1, end)
     ly = 262
@@ -706,14 +709,16 @@ def sc_13():
     add_text('Последний день голосования — воскресенье', 'R', 56, L + 84, 747, t3 + 0.05, end, MUTED)
     # brand card at the finale, same lockup as the opening
     logo = ASSETS + 'petersburg_dom_transparent.png'
-    rect = fit(logo, LOGO_BOX)
+    rect = fit(logo, (L, 110, R - L, 360) if '15' in ITEMS else LOGO_BOX)
 
     def dlogo(ctx, t, a, dy):
         k = ease_out((t - endcard) / 1.0); sc = 0.97 + 0.03 * k
         x, y, w, h = rect; cx, cy = x + w / 2, y + h / 2
         draw_img(ctx, logo, (cx - w * sc / 2, cy - h * sc / 2, w * sc, h * sc), a, ref=rect)
     ELS.append(El(dlogo, endcard, TOTAL + 1, 0.8, 0.2, 0, box=(rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3]), name='logo-end'))
-    add_text('dombalt.ru', 'D', 64, 960, 670, endcard + 0.35, TOTAL + 1, NAVY, 'c')
+    if '15' in ITEMS:   # closing call, same words as the voice
+        add_text('Какие работы одобрить — решать собственникам', 'M', 60, 960, 590, seg_t('15', 0) - 0.25, TOTAL + 1, INK, 'c')
+        add_text('Примите участие в голосовании', 'D', 76, 960, 700, seg_t('15', 1) - 0.25, TOTAL + 1, NAVY, 'c')
 
 
 def build():
@@ -739,6 +744,7 @@ def cues():
                     s0, s1 = nv(sp[:i]) / nv(sp), nv(sp[:i + len(spk)]) / nv(sp)
                 t0 = seg_t(f, k) + s0 * (b - a); t1 = seg_t(f, k) + s1 * (b - a)
                 out.append([t0, t1, txt, ITEMS[_item_for(f, k)['name']]['name']])
+    out.sort(key=lambda c: c[0])   # lines recorded later (e.g. 14) must sit in time order
     # merge short neighbours within one screen state
     m = []
     for c in out:
@@ -764,7 +770,7 @@ def sub_lines(txt, maxw=1480):
     words = txt.split(' '); best = None
     for i in range(1, len(words)):
         a, b = ' '.join(words[:i]), ' '.join(words[i:])
-        if words[i - 1].lower() in PREP: continue
+        if words[i - 1].lower() in PREP or words[i] == '—': continue
         wa, wb = tw(a, 'M', 56), tw(b, 'M', 56)
         if max(wa, wb) > maxw: continue
         adj = words[i - 1].lower().endswith(ADJ)   # keep adjective + noun together
