@@ -19,7 +19,10 @@ def plan(c_end=102, sparse_extra=2):
         k += [(36, 39), (38, 40), (82, c_end)]
     if sparse_extra >= 0:   # bars may come in halves (2 beats)
         whole = int(sparse_extra // 2); rest = sparse_extra - 2 * whole
-        k += [(112, 118)] + [(116, 118)] * whole + ([(118 - rest, 118)] if rest else []) + [(118, None)]
+        loops = [(116, 118)] * whole
+        if rest:   # the half bar goes after the first loop, which lands in the pause before 13b, not under speech
+            loops.insert(min(1, len(loops)), (118 - rest, 118))
+        k += [(112, 118)] + loops + [(118, None)]
     else:
         k += [(112, 118 + sparse_extra), (118, None)]
     return k
