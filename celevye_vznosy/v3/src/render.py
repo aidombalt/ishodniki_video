@@ -345,6 +345,29 @@ def caption_ill(x_right, y, t_in, t_out):
     return add_text('Условная иллюстрация', 'R', 56, x_right, y, t_in, t_out, MUTED, align='r', name='caption')
 
 
+# ---------------------------------------------------------------- photos of the house (why the works are needed)
+PH = ROOT + '/input/photos/'
+
+
+def photo(n, aspect, cx=0.5, cy=0.5, zoom=1.0):
+    """cover crop of photo n to aspect w/h around the focus point (fractions of the frame)"""
+    key = 'ph:%s:%.3f:%.3f:%.3f:%.2f' % (n, aspect, cx, cy, zoom)
+    if key not in _img:
+        im = Image.open(PH + '%s.jpg' % n).convert('RGBA')
+        W0, H0 = im.size
+        w = min(W0, H0 * aspect) / zoom; h = w / aspect
+        x0 = min(max(cx * W0 - w / 2, 0), W0 - w); y0 = min(max(cy * H0 - h / 2, 0), H0 - h)
+        _img[key] = im.crop((round(x0), round(y0), round(x0 + w), round(y0 + h)))
+    return key
+
+
+def add_photo(key, x, y, w, h, t_in, t_out, name, din=0.55, r=28):
+    def d(ctx, t, a, dy):
+        ctx.save(); rrect(ctx, x, y + dy, w, h, r); ctx.clip()
+        draw_img(ctx, key, (x, y + dy, w, h), a, crop=False); ctx.restore()
+    ELS.append(El(d, t_in, t_out, din, 0.3, 26, box=(x, y, x + w, y + h), kind='card', name=name))
+
+
 # ================================================================ scenes
 def sc_logo():
     t0, t1 = cut('logo'), cut('01rad')
@@ -366,7 +389,8 @@ TILES = [ASSETS + n for n in ('water.png', 'halls.png', 'kids.png', 'sport.png')
 
 
 def sc_01():
-    c1, c2, end = cut('01rad'), cut('01main'), cut('02q')
+    c1, c2, end = cut('01rad'), cut('01main'), cut('zA')
+    end_t = cut('zB')   # the four work tiles stay under 'зачем нужны эти работы'
     kicker('В прошлом видео', c1, c2)
     title('Распределители тепла', c1 + 0.08, c2)
     card0 = (720, 330, 1050, 460)
@@ -390,7 +414,7 @@ def sc_01():
             r_ = fit(TILES[0], (x + 18, y + 14, w - 36, h - 28))
             draw_img(ctx, TILES[0], r_, a * ease_io((k - 0.35) / 0.65), ref=fit(TILES[0], (0, 0, tw_ - 36, TH - 28)))
         ctx.restore()
-    e = El(morph, c1 + 0.15, end, 0.6, 0.3, 22, box=(card0[0], card0[1], card0[0] + card0[2], card0[1] + card0[3]),
+    e = El(morph, c1 + 0.15, end_t, 0.6, 0.3, 22, box=(card0[0], card0[1], card0[0] + card0[2], card0[1] + card0[3]),
            kind='card', name='radiator')
     e.boxes = [(0, c2 - 0.15, e.box), (c2 - 0.15, 1e9, (tiles[0][0], tiles[0][1], tiles[0][0] + tw_, tiles[0][1] + TH))]
     ELS.append(e)
@@ -399,12 +423,58 @@ def sc_01():
         def d(ctx, t, a, dy, x=x, y=y, w=w, h=h, i=i):
             rrect(ctx, x, y + dy, w, h, 28); ctx.set_source_rgba(*LIGHT, a); ctx.fill()
             draw_img(ctx, TILES[i], fit(TILES[i], (x + 18, y + 14 + dy, w - 36, h - 28)), a)
-        ELS.append(El(d, seg_t('01', 2) - 1.2 + 0.15 + 0.1 * i, end, 0.55, 0.3, 26, box=(x, y, x + w, y + h), kind='card', name='tile'))
+        ELS.append(El(d, c2 + 0.35 + 0.1 * i, end_t, 0.55, 0.3, 26, box=(x, y, x + w, y + h), kind='card', name='tile'))
     kicker('Ещё одна часть повестки', c2, end)
     t_title = seg_t('01', 2) - 1.2
     title('Целевые взносы', t_title, end)
     add_text('на работы в доме и во дворе', 'M', 60, L, TY + 82, t_title + 0.1, end, NAVY)
     add_text('Что предлагается и сколько составит взнос', 'R', 60, L, TY + 162, seg_t('01', 3) - 0.25, end, INK)
+
+
+def sc_z():
+    """why the works are needed: in the house, in the yard, why a separate contribution"""
+    f = '01z'
+    cD, cE, end = cut('zD'), cut('zE'), cut('02q')
+    title('Зачем нужны эти работы', seg_t(f, 0) - 0.3, cE)
+    CW, CH, CY = 786, 350, 360; X2 = R - CW; CAPY = CY + CH + 60; asp = CW / CH
+    # in the house: one photo and a short list (the pipes are a list item, not a picture)
+    t1 = seg_t(f, 1) - 0.3
+    kicker('В доме', t1, cD)
+    PW, PH_ = 650, 420
+    add_photo(photo(1, PW / PH_, *FOCUS[1]), L, CY, PW, PH_, t1, cD, 'ph-stairs')
+    LX = L + PW + 64
+    bullet_item('Чёрные лестницы', LX, CY + 70, t1 + 0.1, cD)
+    add_text('затёрты стены, сколота краска', 'R', 56, LX + 40, CY + 142, t1 + 0.2, cD, MUTED)
+    t3 = seg_t(f, 3) - 0.3
+    bullet_item('Трубы холодной воды', LX, CY + 262, t3, cD)
+    add_text('в подвале и стояки', 'R', 56, LX + 40, CY + 334, t3 + 0.1, cD, MUTED)
+    t4 = seg_t(f, 4) - 0.3
+    kicker('Во дворе', t4, cE)
+    add_photo(photo(20, asp, *FOCUS[20]), L, CY, CW, CH, t4, cE, 'ph-kids')
+    add_text('Детская площадка', 'M', 56, L, CAPY, t4 + 0.1, cE, INK)
+    t4b = word_t(f, 4, 'спортивной') - 0.25
+    add_photo(photo(26, asp, *FOCUS[26]), X2, CY, CW, CH, t4b, cE, 'ph-sport')
+    add_text('Спортивная площадка', 'M', 56, X2, CAPY, t4b + 0.1, cE, INK)
+    # the monthly fee covers maintenance; works of this scale go to a separate vote
+    t5 = seg_t(f, 5) - 0.3
+    kicker('Как оплатить работы', t5, end)
+    title('Плата за содержание и ремонт', t5 + 0.05, end)
+    add_text('Уборка, осмотры и текущий ремонт', 'M', 60, L, TY + 82, seg_t(f, 6) - 0.25, end, NAVY)
+    t7 = seg_t(f, 7) - 0.3
+    TS, TG, TT, TB = 220, 22, 470, 740
+    for i, n in enumerate((1, 20, 26)):   # the three places just shown
+        add_photo(photo(n, TS / (TB - TT), *THUMB[n]), L + i * (TS + TG), TT, TS, TB - TT, t7 + 0.08 * i, end,
+                  'thumb-%s' % n, r=22)
+    TX = L + 3 * TS + 2 * TG + 64
+    add_lines(['На работы такого объёма', 'этих средств не хватит'], 'M', 60, TX, TT + 54, 78, t7, end, INK)
+    t8 = seg_t(f, 8) - 0.25
+    cw = tw('Целевые взносы', 'D', 60) + 72
+    chip = add_card(TX, TB - 104, cw, 104, t8, end, fill=NAVY, r=26, name='chip-target')
+    add_text('Целевые взносы', 'D', 60, TX + 36, TB - 104 + 73, t8 + 0.05, end, WHITE, inside=chip)
+
+
+FOCUS = {1: (0.5, 0.6), 20: (0.5, 0.5), 26: (0.5, 0.42)}       # card crops (aspect 786:350)
+THUMB = {1: (0.5, 0.6), 20: (0.42, 0.5), 26: (0.5, 0.45)}       # thumbnail crops (portrait)
 
 
 def sc_02():
@@ -545,7 +615,7 @@ def sc_06():
 def sc_07():
     f, m = '07', '07m'
     tm = word_t(m, 2, 'то есть примерно') - 0.25
-    money_scene(f, m, '07a', '07b', '08', '12', 'Спортивная площадка', None,
+    money_scene(f, m, '07a', '07b', '09a', '12', 'Спортивная площадка', None,
                 [('замена оборудования', seg_t(f, 1)), ('замена покрытия', word_t(f, 1, 'покрытия'))],
                 None, ASSETS + 'sport.png', '37,52', '1' + NB + '538,32', '256',
                 seg_t(m, 0) - 0.25, seg_t(m, 1) - 0.25, tm, tm)
@@ -744,7 +814,7 @@ def sc_13():
 
 def build():
     ELS.clear()
-    for f in (sc_logo, sc_01, sc_02, sc_03, sc_04, sc_05, sc_06, sc_07, sc_08, sc_09, sc_10, sc_11, sc_12, sc_13):
+    for f in (sc_logo, sc_01, sc_z, sc_02, sc_03, sc_04, sc_05, sc_06, sc_07, sc_09, sc_10, sc_11, sc_12, sc_13):
         f()
 
 

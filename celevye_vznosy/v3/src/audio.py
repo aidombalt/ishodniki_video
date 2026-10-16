@@ -8,11 +8,12 @@ ROOT = os.environ.get('PROJECT_ROOT', os.path.dirname(os.path.dirname(os.path.ab
 W = ROOT + '/build/'
 LEAD = 0.6          # speech starts this long after the cut
 # Music: Suno track v3 (≈106.95 BPM). Bars are 0-based from the first downbeat; halves allowed.
-# Plan: +½ bar in breakdown 1, +8 groove bars before breakdown 2 (under 08, bar 72 repeated once),
-# +½ bar in the 1-bar break 101, quiet 116-122½ under 12, quiet 123-126 under 13, then 139-145½ + outro.
-KEEP = [(0, 38.5), (38, 69), (61, 71), (71, 73), (72, 76), (76, 100.5), (100, 116), (116, 122.5), (123, 127),
-        (139, 145.5), (145, None)]
-ANCHOR_SEG = {'08': 3, '09a': 5, '12': 7, '13a': 8}   # scene cut = start of that KEEP segment
+# Plan: calm bars of the intro and breaks under logo, 01 and the "why" block (joins chosen by chroma similarity),
+# the intro build (bar 6) into the groove at zE; then the groove with +1/2 bar in breakdown 1 and bars 61-68 repeated,
+# +1/2 bar in break 71-75, 09a on the groove return (76), quiet 116-122 1/2 under 12, quiet 123-126 under 13, then 139-145 1/2 + outro.
+KEEP = [(0, 6), (22, 23), (93, 95), (21, 22), (36, 39), (71, 74), (109, 111), (6, 38.5), (38, 69), (61, 72.5), (72, 100.5), (100, 116),
+        (116, 122.5), (123, 127), (139, 145.5), (145, None)]
+ANCHOR_BAR = {'zE': 7, '09a': 76, '12': 116, '13a': 123}   # scene cut = first downbeat of that original bar
 TAIL_BAR = 146          # final chord (0-based bar of the original track)
 DOWNBEAT_PHASE = 3      # tracked beat index of the first downbeat
 PREROLL = 0.5           # music before the first downbeat (the rest of the pickup is trimmed)
@@ -20,13 +21,14 @@ BEAT_OFFSET = 0.04    # snare/hat attacks land 40 ms after the tracked grid
 
 ITEMS = [('logo', None, 'start'),
  ('01rad', ('01', 0, 0), 'intra'), ('01main', ('01', 1, 3), 'intra'),
+ ('zA', ('01z', 0, 0), 'scene'), ('zB', ('01z', 1, 1), 'intra'), ('zC', ('01z', 3, 3), 'intra'),
+ ('zD', ('01z', 4, 4), 'intra'), ('zE', ('01z', 5, 6), 'scene'), ('zF', ('01z', 7, 8), 'intra'),
  ('02q', ('02', 0, 1), 'scene'), ('02f', ('02', 2, 4), 'intra'), ('02c', ('02', 5, 7), 'intra'),
  ('03a', ('03', 0, 1), 'scene'), ('03b', ('03', 2, 5), 'intra'),
  ('04a', ('04', 0, 4), 'scene'), ('04b', ('04m', 0, -1), 'intra'),
  ('05a', ('05', 0, 1), 'scene'), ('05b', ('05m', 0, -1), 'intra'),
  ('06a', ('06', 0, 1), 'scene'), ('06b', ('06m', 0, -1), 'intra'),
  ('07a', ('07', 0, 1), 'scene'), ('07b', ('07m', 0, -1), 'intra'),
- ('08', ('08', 0, 1), 'scene'),
  ('09a', ('09m', 0, -1), 'scene'), ('09n', ('14', 0, 2), 'intra'), ('09r', ('14', 3, 6), 'intra'),
  ('09b', ('09', 1, 2), 'scene'),
  ('10a', ('10', 0, 1), 'scene'), ('10b', ('10', 2, 2), 'intra'), ('10c', ('10', 3, 3), 'intra'),
@@ -34,6 +36,7 @@ ITEMS = [('logo', None, 'start'),
  ('13a', ('13', 0, 0), 'scene'), ('13b', ('13', 1, 3), 'intra'), ('15', ('15', 0, -1), 'scene')]
 RANGE = {'intra': (1.0, 2.0), 'scene': (2.0, 2.55)}
 TARGET = {'intra': 1.4, 'scene': 2.25}
+RANGE_ITEM = {'zE': (2.0, 2.7)}   # photos -> money: a little longer look at the yard
 
 
 def rd(p):
@@ -134,7 +137,7 @@ def build(beats, force=None, extra=None):
         elif name in force:
             cut = min(beats, key=lambda b: abs(b[0] - force[name]))[0]
         else:
-            lo, hi = RANGE[kind]
+            lo, hi = RANGE_ITEM.get(name, RANGE[kind])
             cand = [b for b in beats if lo <= b[0] + LEAD - t_end <= hi]
             if not cand:   # window narrower than a beat: take the nearest beat
                 cand = sorted(beats, key=lambda b: abs(b[0] + LEAD - t_end - TARGET[kind]))[:1]
@@ -148,7 +151,8 @@ def build(beats, force=None, extra=None):
         t0 = cut + LEAD
         d = dict(name=name, kind=kind, cut=float(cut), vo=f, segs=[s0, s1], a=a, b=b, t0=t0, t1=t0 + b - a,
                  pause=None if t_end is None else t0 - t_end)
-        if d['pause'] is not None and not (RANGE[kind][0] - 0.05 <= d['pause'] <= RANGE[kind][1] + 0.05):
+        rg = RANGE_ITEM.get(name, RANGE[kind])
+        if d['pause'] is not None and not (rg[0] - 0.05 <= d['pause'] <= rg[1] + 0.05):
             print('WARN pause', name, round(d['pause'], 2))
         tl.append(d); t_end = d['t1']
     return tl, t_end
@@ -190,7 +194,7 @@ def main():
     first = {}
     for t, ob in bmap:
         first.setdefault(ob, t)
-    base = {n: starts[i] for n, i in ANCHOR_SEG.items()}
+    base = {n: first[b * 4] for n, b in ANCHOR_BAR.items()}
     tail = first[TAIL_BAR * 4]
     order = [d[0] for d in ITEMS]
     anchors = sorted(base, key=order.index)
@@ -208,7 +212,7 @@ def main():
                 r = (tail - 0.6) - t_end      # final chord ~0.6 s after the last word
                 ok = abs(r) < 0.3   # one beat is 0.56 s: tighter tolerance only oscillates
             else:
-                lo, hi = RANGE[d[a]['kind']]; p = d[a]['pause']
+                lo, hi = RANGE_ITEM.get(a, RANGE[d[a]['kind']]); p = d[a]['pause']
                 r = 0 if lo <= p <= hi else ((lo + hi) / 2 - p)
                 ok = r == 0
             if not ok and free:
@@ -233,6 +237,18 @@ def main():
         if d['kind'] != 'start':
             speech[int(d['t0'] * SR):int(d['t1'] * SR)] = True
     g_under = ride_gain(m, -15.5 - 12.5, tl, total)
+    # per line: keep voice 12-13 LU above the music under it (the 3 s ride cannot see short lines)
+    kv_ = kweight(v) ** 2; corr = np.zeros(n); tt = np.arange(n) / SR
+    Lm = lambda x: 10 * np.log10(x.mean() + 1e-12)
+    for d in tl:
+        if d['kind'] == 'start': continue
+        i0, i1 = int(d['t0'] * SR), int(d['t1'] * SR)
+        bal = Lm(kv_[i0:i1]) - Lm((kweight(m[i0:i1] * g_under[i0:i1])) ** 2)
+        dl = (bal - 12.4) if bal < 12.0 else (bal - 12.6) if bal > 13.0 else 0
+        if dl:
+            env = np.clip(np.minimum((tt - d['t0'] + 0.3) / 0.3, (d['t1'] + 0.3 - tt) / 0.3), 0, 1)
+            corr = np.where(np.abs(dl * env) > np.abs(corr), dl * env, corr)
+    g_under = g_under * 10 ** (corr / 20)
     # duck envelope: +3 dB in pauses longer than 1 s, smooth ramps
     lift = np.zeros(n)
     t = np.arange(n) / SR
