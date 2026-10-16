@@ -1,12 +1,12 @@
 """Music edit on bars, speech-driven timeline on real beats, voice/music mix."""
-import json, subprocess, re, numpy as np
+import json, subprocess, re, os, numpy as np
 from scipy.io import wavfile
 from scipy.signal import resample_poly
 
 SR = 48000
-W = '/tmp/claude-0/-home-user-ishodniki-video/7fdd3399-3b0b-583b-a74f-2847502fb422/scratchpad/work/'
+ROOT = os.environ.get('PROJECT_ROOT', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+W = ROOT + '/build/'
 LEAD = 0.6          # speech starts this long after the cut
-import os
 HAS14 = os.path.exists(W + 'vo/14.wav')   # reassurance line after the total
 HAS15 = os.path.exists(W + 'vo/15.wav')   # closing call to vote on the brand card
 

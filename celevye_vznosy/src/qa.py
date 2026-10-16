@@ -1,7 +1,8 @@
 import json, subprocess, numpy as np, sys
 from PIL import Image
-W = '/tmp/claude-0/-home-user-ishodniki-video/7fdd3399-3b0b-583b-a74f-2847502fb422/scratchpad/'
-tl = json.load(open(W + 'work/timeline.json')); st = json.load(open(W + 'work/framestats.json'))
+import os
+ROOT = os.environ.get('PROJECT_ROOT', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+tl = json.load(open(ROOT + '/build/timeline.json')); st = json.load(open(ROOT + '/build/framestats.json'))
 last = tl['timeline'][-1]['t1']
 cuts = [d['cut'] for d in tl['timeline']] + [min(b for b in tl['beats'] if b >= last + 3.0)]   # + brand end card
 t = np.array([s[0] for s in st]); lum = np.array([s[1] for s in st]); dif = np.array([s[2] for s in st])
@@ -23,9 +24,9 @@ moments[-1] = ('13b', round(last + 2.5, 2)); moments.append(('endcard', round(tl
 for name, w, cols in (('sheet640.jpg', 640, 4), ('sheet390.jpg', 390, 4)):
     h = int(w * 9 / 16); ims = []
     for n, tt in moments:
-        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(tt), '-i', W + 'out/subs.mp4', '-frames:v', '1', '-vf', 'scale=%d:%d:flags=lanczos' % (w, h), '/tmp/claude-0/-home-user-ishodniki-video/7fdd3399-3b0b-583b-a74f-2847502fb422/scratchpad/work/_f.png'])
-        ims.append(Image.open(W + 'work/_f.png').convert('RGB'))
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', str(tt), '-i', ROOT + '/output/celevye_vznosy_subs.mp4', '-frames:v', '1', '-vf', 'scale=%d:%d:flags=lanczos' % (w, h), ROOT + '/build/_f.png'])
+        ims.append(Image.open(ROOT + '/build/_f.png').convert('RGB'))
     rows = (len(ims) + cols - 1) // cols; S = Image.new('RGB', (cols * (w + 6), rows * (h + 6)), (110, 110, 110))
     for i, im in enumerate(ims): S.paste(im, ((i % cols) * (w + 6), (i // cols) * (h + 6)))
-    S.save(W + 'out/' + name, quality=90)
+    S.save(ROOT + '/output/' + name.replace('sheet', 'storyboard_'), quality=90)
 print(moments)

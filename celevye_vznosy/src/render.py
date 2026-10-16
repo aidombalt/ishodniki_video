@@ -7,9 +7,10 @@ import numpy as np, cairo
 from PIL import Image, ImageFont, ImageDraw
 from content import SPOKEN, SUBS, N as NB
 
-WD = '/tmp/claude-0/-home-user-ishodniki-video/7fdd3399-3b0b-583b-a74f-2847502fb422/scratchpad/'
-WORK = WD + 'work/'; ASSETS = WD + 'in_vis/inner/assets/'; FONTD = WD + 'in_font/'
-OUT = WD + 'out/'
+import os
+ROOT = os.environ.get('PROJECT_ROOT', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+WORK = ROOT + '/build/'; ASSETS = ROOT + '/input/assets/'; FONTD = ROOT + '/input/fonts/'
+OUT = ROOT + '/output/'
 W, H, FPS = 1920, 1080, 25
 FONT = {'R': 'Golos-Text_Regular.ttf', 'M': 'Golos-Text_Medium.ttf', 'D': 'Golos-Text_DemiBold.ttf', 'B': 'Golos-Text_Bold.ttf'}
 
@@ -335,7 +336,7 @@ def caption_ill(x_right, y, t_in, t_out):
 # ================================================================ scenes
 def sc_logo():
     t0, t1 = cut('logo'), cut('01rad')
-    logo = WD + 'in_vis/inner/assets/petersburg_dom_transparent.png'
+    logo = ASSETS + 'petersburg_dom_transparent.png'
     rect = fit(logo, LOGO_BOX)
 
     def d(ctx, t, a, dy):
@@ -839,7 +840,7 @@ def main():
             '-vf', 'scale=out_color_matrix=bt709:out_range=tv,format=yuv420p', '-c:v', 'libx264', '-preset', 'slow', '-crf', '16',
             '-tune', 'animation', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
             '-c:a', 'aac', '-b:a', '256k', '-movflags', '+faststart', '-t', '%.3f' % (n / FPS), p], stdin=subprocess.PIPE)
-        p1, p2 = enc(OUT + 'clean.mp4'), enc(OUT + 'subs.mp4')
+        p1, p2 = enc(OUT + 'celevye_vznosy_clean.mp4'), enc(OUT + 'celevye_vznosy_subs.mp4')
         stats = []
         s = cairo.ImageSurface(cairo.FORMAT_ARGB32, W, H)
         prev = None
@@ -852,7 +853,7 @@ def main():
             if i % 500 == 0: print('frame', i, '/', n, flush=True)
         p1.stdin.close(); p2.stdin.close(); p1.wait(); p2.wait()
         json.dump(stats, open(WORK + 'framestats.json', 'w'))
-        open(OUT + 'subs.srt', 'w', encoding='utf-8').write(srt())
+        open(OUT + 'celevye_vznosy.srt', 'w', encoding='utf-8').write(srt())
     elif mode == 'check':
         check()
 
