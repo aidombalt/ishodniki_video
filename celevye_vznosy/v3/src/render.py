@@ -26,6 +26,7 @@ L, R = 150, 1770
 KY = 190          # kicker baseline
 TY = 300          # title baseline
 SAFE_BOTTOM = 790
+AIR = 16          # minimal vertical gap between stacked text blocks
 
 import os
 TL = json.load(open(os.environ.get('TLFILE', WORK + 'timeline.json')))
@@ -329,6 +330,17 @@ def accent_bar(box, t_in, t_out):
     ELS.append(El(d, t_in, t_out, 0.3, 0.3, 0, box=(x0, y, x1, y + 10), name='accent', kind='deco'))
 
 
+def six_payments(x0, y, x1, h, t_in, t_out):
+    """the one sign for 'six equal payments': six cyan segments drawn left to right, then still"""
+    gap = 8; w = (x1 - x0 - 5 * gap) / 6
+    def d(ctx, t, a, dy):
+        for i in range(6):
+            k = ease_out((t - t_in - i * 0.08) / 0.3)
+            if k <= 0: continue
+            rrect(ctx, x0 + i * (w + gap), y + dy, w * k, h, min(10, h / 2)); ctx.set_source_rgba(*CYAN, a); ctx.fill()
+    ELS.append(El(d, t_in, t_out, 0.2, 0.2, 0, box=(x0, y, x1, y + h), name='six', kind='deco'))
+
+
 def caption_ill(x_right, y, t_in, t_out):
     return add_text('Условная иллюстрация', 'R', 56, x_right, y, t_in, t_out, MUTED, align='r', name='caption')
 
@@ -396,38 +408,45 @@ def sc_01():
 
 
 def sc_02():
-    c1, c2, end = cut('02q'), cut('02f'), cut('03a')
+    c1, c2, c3, end = cut('02q'), cut('02f'), cut('02c'), cut('03a')
     kicker('Предложения к голосованию', c1, c2)
     row_y = 250; cs = 150
     t = add_text('Вопросы', 'B', 88, L, row_y + cs / 2 + 31, seg_t('02', 0) - 0.3, c2, NAVY)
     x = L + t.width + 44
-    words = ['восемь', 'десять', 'одиннадцать', 'двенадцать']
-    for i, (num, wd) in enumerate(zip(['8', '10', '11', '12'], words)):
+    for i, (num, wd) in enumerate(zip(['8', '10', '11', '12'], ['восемь', 'десять', 'одиннадцать', 'двенадцать'])):
         xx = x + i * (cs + 24); ti = word_t('02', 0, wd) - 0.2
         def d(ctx, tt, a, dy, xx=xx):
             rrect(ctx, xx, row_y + dy, cs, cs, 26); ctx.set_source_rgba(*NAVY, a); ctx.fill()
         ELS.append(El(d, ti, c2, 0.45, 0.3, 22, box=(xx, row_y, xx + cs, row_y + cs), kind='card', name='chip'))
         add_text(num, 'B', 84, xx + cs / 2, row_y + cs / 2 + 30, ti, c2, WHITE, 'c', inside=(xx, row_y, xx + cs, row_y + cs))
-    add_text('Отдельные разовые взносы', 'D', 72, L, 530, word_t('02', 0, 'предусматривают') - 0.2, c2, NAVY)
-    add_text('По каждому вопросу собственники голосуют отдельно', 'R', 56, L, 620, seg_t('02', 1) - 0.25, c2, INK)
-    # formula
+    add_text('Отдельные целевые взносы', 'D', 72, L, 530, word_t('02', 0, 'предусматривают') - 0.2, c2, NAVY)
+    add_text('По каждому из них собственники голосуют отдельно', 'R', 56, L, 620, seg_t('02', 1) - 0.25, c2, INK)
+    # how the contribution is calculated and charged
     kicker('Как рассчитывается взнос', c2, end)
-    bw, bh, by = 500, 230, 270
+    bw, bh, by = 500, 230, 250
     op = (R - L - 3 * bw) / 2
     bx = [L, L + bw + op, L + 2 * (bw + op)]
     t_f = c2 + 0.05
-    b1 = add_card(bx[0], by, bw, bh, t_f, end, name='box1')
-    add_lines(['Общая площадь', 'помещения'], 'M', 56, bx[0] + bw / 2, by + 102, 74, t_f + 0.05, end, INK, align='c', inside=b1)
-    add_text('×', 'R', 84, bx[0] + bw + op / 2, by + bh / 2 + 28, t_f + 0.15, end, NAVY, 'c')
-    add_card(bx[1], by, bw, bh, t_f + 0.2, word_t('02', 3, 'ставку') - 0.1, dashed=True, name='placeholder')
-    t2 = word_t('02', 3, 'ставку') - 0.25
-    b2 = add_card(bx[1], by, bw, bh, t2, end, name='box2')
-    add_lines(['Ставка', 'из бюллетеня'], 'M', 56, bx[1] + bw / 2, by + 102, 74, t2 + 0.05, end, INK, align='c', inside=b2)
-    add_text('=', 'R', 84, bx[1] + bw + op / 2, by + bh / 2 + 28, t_f + 0.25, end, NAVY, 'c')
-    b3 = add_card(bx[2], by, bw, bh, t_f + 0.3, end, fill=NAVY, name='box3')
-    add_text('Взнос', 'D', 72, bx[2] + bw / 2, by + bh / 2 + 25, t_f + 0.35, end, WHITE, 'c', inside=b3)
+    b1 = add_card(bx[0], by, bw, bh, t_f, c3, name='box1')
+    add_lines(['Общая площадь', 'помещения'], 'M', 56, bx[0] + bw / 2, by + 102, 74, t_f + 0.05, c3, INK, align='c', inside=b1)
+    add_text('×', 'R', 84, bx[0] + bw + op / 2, by + bh / 2 + 28, t_f + 0.15, c3, NAVY, 'c')
+    t2 = word_t('02', 2, 'на ставку') - 0.25
+    add_card(bx[1], by, bw, bh, t_f + 0.2, t2 + 0.15, dashed=True, name='placeholder')
+    b2 = add_card(bx[1], by, bw, bh, t2, c3, name='box2')
+    add_lines(['Ставка', 'из бюллетеня'], 'M', 56, bx[1] + bw / 2, by + 102, 74, t2 + 0.05, c3, INK, align='c', inside=b2)
+    add_text('=', 'R', 84, bx[1] + bw + op / 2, by + bh / 2 + 28, t_f + 0.25, c3, NAVY, 'c')
+    b3 = add_card(bx[2], by, bw, bh, t_f + 0.3, c3, fill=NAVY, name='box3')
+    add_text('Взнос', 'D', 72, bx[2] + bw / 2, by + bh / 2 + 25, t_f + 0.35, c3, WHITE, 'c', inside=b3)
+    t3 = seg_t('02', 3) - 0.25
+    add_text('Начисление — после принятия решения', 'M', 60, L, 588, t3, c3, NAVY)
     t4 = seg_t('02', 4) - 0.25
-    add_lines(wrap('Решение о работах и их финансировании принимается на собрании', 'M', 60, R - L), 'M', 60, L, 640, 80, t4, end, NAVY)
+    six_payments(L, 630, R, 52, t4, c3)
+    add_text('6 равных платежей в течение 6 месяцев', 'R', 56, L, 762, t4 + 0.3, c3, MUTED)
+    # without a decision there is no charge
+    t5 = seg_t('02', 5) - 0.25
+    cd = add_card(L, 330, R - L, 300, c3 + 0.05, end, name='nocharge')
+    add_lines(['Если решение по вопросу не примут,', 'взноса по нему не будет'], 'D', 72, 960, 450, 96, max(c3 + 0.1, t5), end,
+              NAVY, align='c', inside=cd)
 
 
 def sc_03():
@@ -459,90 +478,82 @@ def sc_03():
     add_text('Если она отличается, изменится и сумма', 'R', 56, L, 752, seg_t('03', 5) - 0.25, end, MUTED)
 
 
-def money_scene(f, a, b, nxt, q, ttl, t_ttl, label, items, qual, img, rate, total):
+def money_scene(f, fm, a, b, nxt, q, ttl, label, items, qual, img, rate, total, monthly, t_rate, t_total, t_six, t_month):
     c1, c2, end = cut(a), cut(b), cut(nxt)
-    kicker('Вопрос ' + q + ' · разовый взнос', c1, end)
+    kicker('Вопрос ' + q + ' · целевой взнос', c1, end)
     title(ttl, c1 + 0.08, end)
-    boxA = fit(img, (1060, 340, 710, 360)); boxB = fit(img, (1150, 350, 620, 280))
-
-    def dimg(ctx, t, a_, dy):
-        k = ease_io((t - (c2 - 0.2)) / 0.7)
-        r = tuple(lerp(boxA[i], boxB[i], k) for i in range(4))
-        draw_img(ctx, img, (r[0], r[1] + dy, r[2], r[3]), a_, ref=boxA)
-    e = El(dimg, c1 + 0.1, end, 0.6, 0.3, 26, box=(boxA[0], boxA[1], boxA[0] + boxA[2], boxA[1] + boxA[3]), name='ill', kind='card')
-    e.boxes = [(0, c2 - 0.2, e.box), (c2 - 0.2, 1e9, (boxB[0], boxB[1], boxB[0] + boxB[2], boxB[1] + boxB[3]))]; ELS.append(e)
+    boxA = fit(img, (1060, 340, 710, 360))
+    ELS.append(El(lambda ctx, t, a_, dy: draw_img(ctx, img, (boxA[0], boxA[1] + dy, boxA[2], boxA[3]), a_),
+                  c1 + 0.1, c2, 0.6, 0.3, 26, box=(boxA[0], boxA[1], boxA[0] + boxA[2], boxA[1] + boxA[3]), name='ill', kind='card'))
     CAP = 32   # disclaimer under illustrations: small, unobtrusive
-    cw_ = tw('Условная иллюстрация', 'R', CAP)
-    cxA = min(boxA[0] + boxA[2] / 2, R - cw_ / 2); cxB = min(boxB[0] + boxB[2] / 2, R - cw_ / 2)
-    capA = Text('Условная иллюстрация', 'R', CAP, cxA, boxA[1] + boxA[3] + 40, MUTED, 'c')
-    capB_y = boxB[1] + boxB[3] + 40
-
-    def dcap(ctx, t, a_, dy):
-        k = ease_io((t - (c2 - 0.2)) / 0.7)
-        capA.draw(ctx, a_, (cxB - cxA) * k, dy + (capB_y - capA.y) * k)
-    e = El(dcap, c1 + 0.3, end, 0.5, 0.3, 22, box=capA.bbox(), name='caption')
-    bA = capA.bbox(); dxB, dyB = cxB - cxA, capB_y - capA.y
-    e.boxes = [(0, c2 - 0.2, bA), (c2 - 0.2, 1e9, (bA[0] + dxB, bA[1] + dyB, bA[2] + dxB, bA[3] + dyB))]
-    ELS.append(e)
-    # state A: what is replaced
+    cxA = min(boxA[0] + boxA[2] / 2, R - tw('Условная иллюстрация', 'R', CAP) / 2)
+    add_text('Условная иллюстрация', 'R', CAP, cxA, boxA[1] + boxA[3] + 40, c1 + 0.3, c2, MUTED, 'c', name='caption')
     y = 410
     if label:
         add_text(label[0], 'R', 56, L, y, label[1] - 0.2, c2, MUTED); y += 80
     for txt, ti in items:
         bullet_item(txt, L, y, ti - 0.2, c2); y += 76
     if qual:
-        lines = wrap(qual[0], 'R', 56, 840)
-        add_lines(lines, 'R', 56, L, y + 22, 72, qual[1] - 0.2, c2, MUTED)
-    # state B: calculation card
-    cx0, cy0, cw, ch = L, 340, 920, 440
+        add_lines(wrap(qual[0], 'R', 56, 840), 'R', 56, L, y + 22, 72, qual[1] - 0.2, c2, MUTED)
+    # calculation card: rate, the whole contribution, then the monthly payment (big) and the six payments
+    cx0, cy0, cw, ch = L, 340, R - L, 440
     card = add_card(cx0, cy0, cw, ch, c2, end, name='calc')
-    add_text('Ставка', 'R', 56, cx0 + 52, cy0 + 95, c2 + 0.08, end, MUTED, inside=card)
-    add_text(rate + NB + '₽ за' + NB + 'м²', 'D', 72, cx0 + cw - 52, cy0 + 95, c2 + 0.12, end, NAVY, 'r', inside=card)
+    p0, p1 = cx0 + 56, cx0 + cw - 56
+    add_text('Ставка', 'R', 56, p0, cy0 + 96, t_rate, end, MUTED, inside=card)
+    add_text(rate + NB + '₽ за' + NB + 'м²', 'D', 64, p1, cy0 + 96, t_rate + 0.06, end, NAVY, 'r', inside=card)
+    add_text('Для 41' + NB + 'м² — всего', 'R', 56, p0, cy0 + 186, t_total, end, MUTED, inside=card)
+    add_text(total + NB + '₽', 'D', 64, p1, cy0 + 186, t_total + 0.06, end, NAVY, 'r', inside=card)
 
     def drule(ctx, t, a_, dy):
-        rrect(ctx, cx0 + 52, cy0 + 140 + dy, cw - 104, 3, 1.5); ctx.set_source_rgba(*RULE, a_); ctx.fill()
-    ELS.append(El(drule, c2 + 0.15, end, 0.5, 0.3, 10, box=(cx0 + 52, cy0 + 140, cx0 + cw - 52, cy0 + 143), name='rule', kind='deco'))
-    t_sum = seg_t(f, max(k for k in SUBS[f] if SUBS[f][k][0][0].startswith('Для квартиры'))) - 0.25
-    lab = add_text('Взнос для квартиры 41' + NB + 'м²', 'R', 56, cx0 + 52, cy0 + 228, t_sum, end, MUTED, inside=card)
-    big = add_text(total + NB + '₽', 'B', 150, cx0 + 52, cy0 + 362, t_sum + 0.1, end, NAVY, inside=card)
-    bb = big.bbox()
-    accent_bar(bb, t_sum + 0.35, end)
+        rrect(ctx, p0, cy0 + 232 + dy, p1 - p0, 3, 1.5); ctx.set_source_rgba(*RULE, a_); ctx.fill()
+    ELS.append(El(drule, t_total, end, 0.5, 0.3, 10, box=(p0, cy0 + 232, p1, cy0 + 235), name='rule', kind='deco'))
+    big = add_text('≈' + NB + monthly + NB + '₽', 'B', 150, p0, cy0 + 392, t_month, end, NAVY, inside=card)
+    mo = add_text('в месяц', 'D', 64, big.x + big.width + 28, cy0 + 392, t_month + 0.1, end, NAVY, inside=card)
+    sx0 = max(mo.x + mo.width + 90, cx0 + 1060)
+    add_text('6 платежей', 'R', 56, sx0, cy0 + 318, t_six, end, MUTED, inside=card)
+    six_payments(sx0, cy0 + 344, p1, 48, t_six + 0.1, end)
 
 
 def sc_04():
-    f = '04'
-    money_scene(f, '04a', '04b', '05a', '8', 'Холодное водоснабжение', seg_t(f, 1) - 0.25,
+    f, m = '04', '04m'
+    money_scene(f, m, '04a', '04b', '05a', '8', 'Холодное водоснабжение',
                 ('Замена элементов системы:', seg_t(f, 1) + 1.2),
                 [('стояки', seg_t(f, 2)), ('трубы в подвале', seg_t(f, 3)),
                  ('подпитка в тепловом пункте', word_t(f, 3, 'элементов подпитки'))],
-                None, ASSETS + 'water.png', '84,94', '3' + NB + '482,54')
+                None, ASSETS + 'water.png', '84,94', '3' + NB + '482,54', '580',
+                seg_t(m, 0) - 0.25, seg_t(m, 2) - 0.25, seg_t(m, 3) - 0.25, seg_t(m, 4) - 0.25)
 
 
 def sc_05():
-    f = '05'
-    money_scene(f, '05a', '05b', '06a', '10', 'Косметический ремонт', seg_t(f, 1) - 0.25, None,
+    f, m = '05', '05m'
+    tm = seg_t(m, 4) - 0.25
+    money_scene(f, m, '05a', '05b', '06a', '10', 'Косметический ремонт', None,
                 [('приквартирные холлы', word_t(f, 1, 'приквартирных')), ('лифтовые холлы', word_t(f, 1, 'лифтовых')),
                  ('чёрные лестницы', word_t(f, 1, 'а также'))],
-                ('В местах, где нужен ремонт', word_t(f, 1, 'в местах')), ASSETS + 'halls.png', '109,96', '4' + NB + '508,36')
+                ('В местах, где нужен ремонт', word_t(f, 1, 'в местах')), ASSETS + 'halls.png', '109,96', '4' + NB + '508,36', '751',
+                seg_t(m, 0) - 0.25, seg_t(m, 2) - 0.25, tm, tm)
 
 
 def sc_06():
-    f = '06'
-    money_scene(f, '06a', '06b', '07a', '11', 'Детские площадки', seg_t(f, 1) - 0.25, None,
+    f, m = '06', '06m'
+    money_scene(f, m, '06a', '06b', '07a', '11', 'Детские площадки', None,
                 [('замена оборудования', seg_t(f, 1)), ('замена покрытия', word_t(f, 1, 'покрытия'))],
-                None, ASSETS + 'kids.png', '207,14', '8' + NB + '492,74')
+                None, ASSETS + 'kids.png', '207,14', '8' + NB + '492,74', '1' + NB + '415',
+                seg_t(m, 0) - 0.25, word_t(m, 0, 'взнос для квартиры') - 0.25, seg_t(m, 1) - 0.25, seg_t(m, 2) - 0.25)
 
 
 def sc_07():
-    f = '07'
-    money_scene(f, '07a', '07b', '08', '12', 'Спортивная площадка', seg_t(f, 1) - 0.25, None,
+    f, m = '07', '07m'
+    tm = word_t(m, 2, 'то есть примерно') - 0.25
+    money_scene(f, m, '07a', '07b', '08', '12', 'Спортивная площадка', None,
                 [('замена оборудования', seg_t(f, 1)), ('замена покрытия', word_t(f, 1, 'покрытия'))],
-                None, ASSETS + 'sport.png', '37,52', '1' + NB + '538,32')
+                None, ASSETS + 'sport.png', '37,52', '1' + NB + '538,32', '256',
+                seg_t(m, 0) - 0.25, seg_t(m, 1) - 0.25, tm, tm)
 
 
 def sc_08():
     c1, end = cut('08'), cut('09a')
-    kicker('Вопросы 11 и 12 · площадки', c1, end)
+    kicker('Проекты решений · вопросы 11 и 12', c1, end)
     title('Отдельное условие', c1 + 0.1, end)
     t1 = seg_t('08', 1) - 0.3
     card = add_card(L, 350, R - L, 430, t1 - 0.1, end, name='cond')
@@ -559,66 +570,74 @@ def sc_08():
 
 
 def sc_09():
-    c1, c2, end = cut('09a'), cut('09b'), cut('10a')
-    has_n = '09n' in ITEMS          # optional reassurance block right after the total
-    cm = cut('09n') if has_n else c2
-    kicker('Если собрание примет все четыре вопроса', c1, end)
-    title('Для квартиры 41' + NB + 'м²', c1 + 0.55, end)
-    vals = [('8', '3' + NB + '482,54'), ('10', '4' + NB + '508,36'), ('11', '8' + NB + '492,74'), ('12', '1' + NB + '538,32')]
+    c1, cn, cr, c2, end = cut('09a'), cut('09n'), cut('09r'), cut('09b'), cut('10a')
+    # 09a: the four monthly payments, the whole sum, then the monthly total
+    kicker('Если собственники одобрят все четыре предложения', c1, cn)
+    title('Для квартиры 41' + NB + 'м²', c1 + 0.1, cn)
+    tb = seg_t('09m', 1) - 0.25
+    add_text('Платежи в месяц · округлены до рубля', 'R', 56, L, 392, c1 + 0.6, tb - 0.05, MUTED)
     gw = (R - L - 30) / 2
-    for i, (q, v) in enumerate(vals):
-        x = L + (i % 2) * (gw + 30); y = 370 + (i // 2) * 150
+    for i, (q, v) in enumerate([('8', '580'), ('10', '751'), ('11', '1' + NB + '415'), ('12', '256')]):
+        x = L + (i % 2) * (gw + 30); y = 430 + (i // 2) * 140
         ti = c1 + 0.8 + 0.12 * i
-        cd = add_card(x, y, gw, 130, ti, cm, name='sum-tile')
-        add_text('Вопрос ' + q, 'R', 56, x + 44, y + 85, ti + 0.05, cm, MUTED, inside=cd)
-        add_text(v + NB + '₽', 'D', 64, x + gw - 44, y + 87, ti + 0.08, cm, NAVY, 'r', inside=cd)
-    ts = word_t('09', 0, 'общая сумма') - 0.3
+        cd = add_card(x, y, gw, 120, ti, tb - 0.05, name='sum-tile')
+        add_text('Вопрос ' + q, 'R', 56, x + 44, y + 80, ti + 0.05, tb - 0.05, MUTED, inside=cd)
+        add_text('≈' + NB + v + NB + '₽', 'D', 64, x + gw - 44, y + 82, ti + 0.08, tb - 0.05, NAVY, 'r', inside=cd)
+    tt = word_t('09m', 0, 'сумма взносов') - 0.25
+    add_text('Всего для 41' + NB + 'м², 6 платежей', 'R', 56, L, 770, tt, cn, MUTED)
+    add_text('18' + NB + '021,96' + NB + '₽', 'D', 64, R, 770, tt + 0.06, cn, NAVY, 'r')
+    big = add_text('≈' + NB + '3' + NB + '004' + NB + '₽', 'B', 150, L, 560, tb + 0.05, cn, NAVY)
+    mo = add_text('в месяц', 'D', 64, big.x + big.width + 28, 560, tb + 0.15, cn, NAVY)
+    sx0 = max(mo.x + mo.width + 90, 1210)
+    add_text('6 платежей', 'R', 56, sx0, 486, tb + 0.05, cn, MUTED)
+    six_payments(sx0, 512, R, 48, tb + 0.15, cn)
+    add_text('Итог рассчитан до округления платежей', 'R', 56, L, 662, tb + 0.35, cn, MUTED)
+    # 09n: calculator for any flat
+    kicker('Все четыре вопроса · 6 платежей', cn, c2)
+    title('Платёж в месяц', cn + 0.08, cr)
+    tf = word_t('14', 0, 'умножьте') - 0.25
+    add_text('Площадь в' + NB + 'м² × 73,26' + NB + '₽/м²', 'B', 110, L, 480, tf, cr, NAVY)
+    add_text('Общий взнос = площадь в' + NB + 'м² × 439,56' + NB + '₽/м²', 'R', 56, L, 590, tf + 0.4, cr, MUTED)
+    add_text('Не примут какое-то решение — платёж будет меньше', 'M', 60, L, 720, seg_t('14', 1) - 0.25, cr, NAVY)
+    # 09r: why the shown payments do not add up to the total exactly
+    title('Округление до рубля', cr + 0.08, c2)
+    cd = add_card(L, 350, R - L, 352, cr + 0.1, c2, name='rounding')
+    ta, tb2 = seg_t('14', 3) - 0.25, seg_t('14', 4) - 0.25
+    add_text('Сумма платежей на экране, округлённых до рубля', 'R', 56, L + 56, 432, ta, c2, MUTED, inside=cd)
+    add_text('580 + 751 + 1' + NB + '415 + 256 = 3' + NB + '002' + NB + '₽', 'D', 64, L + 56, 508, ta + 0.1, c2, NAVY, inside=cd)
+    add_text('Общий платёж рассчитан до округления', 'R', 56, L + 56, 594, tb2, c2, MUTED, inside=cd)
+    add_text('3' + NB + '003,66' + NB + '₽ ≈ 3' + NB + '004' + NB + '₽', 'D', 64, L + 56, 670, tb2 + 0.1, c2, NAVY, inside=cd)
+    add_icon('doc', L, 728, 56, seg_t('14', 6) - 0.25, c2)
+    add_text('Точную сумму к оплате вы увидите в квитанции', 'M', 60, L + 84, 776, seg_t('14', 6) - 0.2, c2, INK)
+    # 09b: distributors are a separate calculation
+    kicker('Вопросы 3 и 4', c2, end)
+    title('Распределители тепла', c2 + 0.08, end)
+    t1 = seg_t('09', 1) - 0.25
+    add_text('Взнос на распределители', 'M', 60, L, 430, t1, end, NAVY)
+    add_text('в этот расчёт не входит', 'M', 60, L, 510, t1 + 0.08, end, NAVY)
+    add_lines(wrap('Он зависит от количества радиаторов и выбранного варианта', 'R', 56, 860), 'R', 56, L, 620, 74,
+              seg_t('09', 2) - 0.25, end, MUTED)
+    rim = load_img(RAD, crop=False); box = (1110, 340, 660, 420)
 
-    def drule(ctx, t, a, dy):
-        k = ease_out((t - ts) / 0.7)
-        rrect(ctx, L, 668, (R - L) * k, 4, 2); ctx.set_source_rgba(*NAVY, a); ctx.fill()
-    ELS.append(El(drule, ts, cm, 0.2, 0.3, 0, box=(L, 668, R, 672), name='sumrule'))
-    lab = Text('Общая сумма', 'R', 56, L, 766, MUTED)
-    LAB_B = 420 if has_n else 434
-    big = Text('18' + NB + '021,96' + NB + '₽', 'B', 170, L, 0, NAVY)
-    sA = 100 / 170
-    yA, yB = 770, (578 if has_n else 594)
-    xA = R - (big.bbox()[2] - L) * sA   # align the ink edge to the right margin
-
-    def dlab(ctx, t, a, dy):
-        k = ease_io((t - (cm - 0.2)) / 0.7)
-        lab.draw(ctx, a, 0, dy + lerp(0, LAB_B - 766, k))
-    e = El(dlab, ts + 0.1, end, 0.5, 0.3, 18, box=lab.bbox(), name='sumlabel'); lb = lab.bbox()
-    e.boxes = [(0, cm - 0.2, lb), (cm - 0.2, 1e9, (lb[0], lb[1] + LAB_B - 766, lb[2], lb[3] + LAB_B - 766))]; ELS.append(e)
-
-    def dbig(ctx, t, a, dy):
-        k = ease_io((t - (cm - 0.2)) / 0.7)
-        s = lerp(sA, 1, k); x = lerp(xA, L, k); y = lerp(yA, yB, k)
-        ctx.save(); ctx.translate(x, y + dy); ctx.scale(s, s)
-        surf, _, ox, oy, _ = tmask(big.txt, 'B', 170)
-        ctx.set_source_rgba(*NAVY, a); ctx.mask_surface(surf, ox, oy); ctx.restore()
-    bb = big.bbox()
-    e = El(dbig, ts + 0.2, end, 0.5, 0.3, 18, box=(L, yB + bb[1], L + big.width, yB + bb[3]), name='total')
-    e.boxes = [(0, cm - 0.2, (xA + (bb[0] - L) * sA, yA + bb[1] * sA, xA + (bb[2] - L) * sA, yA + bb[3] * sA)), (cm - 0.2, 1e9, e.box)]
-    ELS.append(e)
-    accent_bar((L, yB + bb[1], L + big.width, yB + bb[3]), cm + 0.5, end)
-    ny = 700 if has_n else 732
-    if has_n:
-        add_text('Это не ежемесячная плата, а разовые взносы', 'M', 60, L, ny, seg_t('14', 0) - 0.25, c2, NAVY)
-        add_text('Итог зависит от того, какие вопросы примет собрание', 'R', 56, L, ny + 74,
-                 seg_t('14', 2) - 0.25, c2, MUTED)
-    add_text('Взнос на распределители в этот расчёт не входит', 'M', 60, L, ny, seg_t('09', 1) - 0.25, end, NAVY)
+    def drad(ctx, t, a, dy):
+        x, y, w, h = box
+        ctx.save(); rrect(ctx, x, y + dy, w, h, 28); ctx.clip()
+        s = max(w / rim.width, h / rim.height); iw, ih = rim.width * s, rim.height * s
+        draw_img(ctx, RAD, (x + w - iw, y + dy + (h - ih) / 2, iw, ih), a, crop=False, ref=(0, 0, 1100, 1100 * rim.height / rim.width))
+        ctx.restore()
+    ELS.append(El(drad, c2 + 0.15, end, 0.6, 0.3, 26, box=(box[0], box[1], box[0] + box[2], box[1] + box[3]), kind='card', name='radiator09'))
 
 
 def sc_10():
     c1, c2, c3, end = cut('10a'), cut('10b'), cut('10c'), cut('11')
-    kicker('В указанные ставки включены', c1, c2)
-    title('Материалы и работы', c1 + 0.1, c2)
+    kicker('По проектам решений · вопросы 8, 10, 11 и 12', c1, c2)
+    title('Стоимость работ и материалов', c1 + 0.08, c2)
+    add_text('В ставки включены материалы и работы', 'M', 60, L, 410, seg_t('10', 0) - 0.25, c2, INK)
     t1 = seg_t('10', 1) - 0.3
-    card = add_card(L, 400, R - L, 220, t1, c2, name='fixed')
-    add_icon('lock', L + 56, 468, 80, t1 + 0.05, c2)
-    add_text('По проекту решения', 'R', 56, L + 180, 488, t1 + 0.1, c2, MUTED, inside=card)
-    add_text('стоимость работ фиксирована', 'D', 64, L + 180, 570, t1 + 0.16, c2, NAVY, inside=card)
+    card = add_card(L, 470, R - L, 220, t1, c2, name='fixed')
+    add_icon('lock', L + 56, 538, 80, t1 + 0.05, c2)
+    add_text('По проекту решения', 'R', 56, L + 180, 558, t1 + 0.1, c2, MUTED, inside=card)
+    add_text('стоимость работ фиксирована', 'D', 64, L + 180, 640, t1 + 0.16, c2, NAVY, inside=card)
     kicker('По проекту решения: если стоимость материалов', c2, end)
     for ic, head, body, ti, to in [
             ('down', 'Обоснованно снизится',
@@ -639,10 +658,11 @@ def sc_11():
     t1 = seg_t('11', 1) - 0.25
     add_icon('user', L, 418, 64, t1, end)
     add_text('Личный кабинет ELSA', 'M', 60, L + 100, 470, t1 + 0.05, end, INK)
+    add_text('приложение или сайт dom.myelsa.ru', 'R', 56, L + 100, 546, t1 + 0.12, end, MUTED)
     t2 = word_t('11', 2, 'или в офисе') - 0.25
-    add_icon('pin', L, 548, 64, t2, end)
-    add_text('Офис управляющей компании', 'M', 60, L + 100, 600, t2 + 0.05, end, INK)
-    add_text('с торца 3-й парадной', 'R', 56, L + 100, 676, t2 + 0.12, end, MUTED)
+    add_icon('pin', L, 610, 64, t2, end)
+    add_text('Офис управляющей компании', 'M', 60, L + 100, 662, t2 + 0.05, end, INK)
+    add_text('с торца 3-й парадной', 'R', 56, L + 100, 738, t2 + 0.12, end, MUTED)
 
 
 def sc_12():
@@ -891,6 +911,8 @@ def check():
                 a, b = tx[i].box_at(t), tx[j].box_at(t)
                 if a[0] < b[2] - 2 and b[0] < a[2] - 2 and a[1] < b[3] - 2 and b[1] < a[3] - 2:
                     probs.append('%.2f overlap %s | %s' % (t, tx[i].name, tx[j].name))
+                elif a[0] < b[2] and b[0] < a[2] and min(abs(a[1] - b[3]), abs(b[1] - a[3])) < AIR:
+                    probs.append('%.2f tight %s | %s' % (t, tx[i].name, tx[j].name))   # elements almost touching
     print('\n'.join(sorted(set(probs))) or 'layout OK')
     for s, e, txt in CUES:
         if len(sub_lines(txt)) > 2: print('sub >2 lines', txt)

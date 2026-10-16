@@ -7,26 +7,16 @@ SR = 48000
 ROOT = os.environ.get('PROJECT_ROOT', os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 W = ROOT + '/build/'
 LEAD = 0.6          # speech starts this long after the cut
-HAS14 = os.path.exists(W + 'vo/14.wav')   # reassurance line after the total
-HAS15 = os.path.exists(W + 'vo/15.wav')   # closing call to vote on the brand card
-
-
-def plan(c_end=102, sparse_extra=2):
-    """original bar ranges played in order. Groove C runs to bar c_end, the quiet section is stretched or
-    shortened by sparse_extra bars (looping bars 116-117), then dip, final groove and the final chord."""
-    k = [(0, 27), (31, 82 if HAS14 else c_end)]
-    if HAS14:   # 5 bars of the kick-less breakdown under the block after the total; groove returns on 09b
-        k += [(36, 39), (38, 40), (82, c_end)]
-    if sparse_extra >= 0:   # bars may come in halves (2 beats)
-        whole = int(sparse_extra // 2); rest = sparse_extra - 2 * whole
-        loops = [(116, 118)] * whole
-        if rest:   # the half bar goes after the first loop, which lands in the pause before 13b, not under speech
-            loops.insert(min(1, len(loops)), (118 - rest, 118))
-        k += [(112, 118)] + loops + [(118, None)]
-    else:
-        k += [(112, 118 + sparse_extra), (118, None)]
-    return k
-BEAT_OFFSET = 0.062   # tracked grid sat between 16ths; kick/snare land 62 ms later
+# Music: Suno track v3 (≈106.95 BPM). Bars are 0-based from the first downbeat; halves allowed.
+# Plan: +½ bar in breakdown 1, +8 groove bars before breakdown 2 (under 08, bar 72 repeated once),
+# +½ bar in the 1-bar break 101, quiet 116-122½ under 12, quiet 123-126 under 13, then 139-145½ + outro.
+KEEP = [(0, 38.5), (38, 69), (61, 71), (71, 73), (72, 76), (76, 100.5), (100, 116), (116, 122.5), (123, 127),
+        (139, 145.5), (145, None)]
+ANCHOR_SEG = {'08': 3, '09a': 5, '12': 7, '13a': 8}   # scene cut = start of that KEEP segment
+TAIL_BAR = 146          # final chord (0-based bar of the original track)
+DOWNBEAT_PHASE = 3      # tracked beat index of the first downbeat
+PREROLL = 0.5           # music before the first downbeat (the rest of the pickup is trimmed)
+BEAT_OFFSET = 0.04    # snare/hat attacks land 40 ms after the tracked grid
 
 ITEMS = [('logo', None, 'start'),
  ('01rad', ('01', 0, 0), 'intra'), ('01main', ('01', 1, 3), 'intra'),
@@ -98,12 +88,12 @@ def ride_gain(m, target, tl, total):
 
 def edit_music(KEEP):
     x = rd(W + 'music48.wav')
-    beats = np.array(json.load(open(W + 'beats_s.json'))) + BEAT_OFFSET
+    beats = (np.array(json.load(open(W + 'beats_s.json'))) + BEAT_OFFSET)[DOWNBEAT_PHASE:]
     db = beats[0::4]
     keep = []
     at = lambda bar: beats[int(round(bar * 4))]   # bars may be fractional (half bars)
     for a, b in KEEP:
-        s0 = 0.0 if a == 0 else onset(x, at(a))
+        s0 = at(0) - PREROLL if a == 0 else onset(x, at(a))
         s1 = len(x) / SR if b is None else onset(x, at(b))
         keep.append((s0, s1))
     xf = int(0.02 * SR); pre = int(0.003 * SR)
@@ -121,6 +111,7 @@ def edit_music(KEEP):
             out[-xf:] += seg[:xf]
             out = np.concatenate([out, seg[xf:]])
         else:
+            fi = int(0.15 * SR); seg[:fi] *= np.linspace(0, 1, fi)   # trimmed pickup: short fade-in
             out = seg
         for bi, bt in enumerate(beats):
             if s - 0.08 <= bt < e - 0.08:
@@ -194,53 +185,41 @@ def voice_stem(tl, total):
 
 
 def main():
-    def landmarks(bmap, starts, keep):
-        lm = {}
-        for t, ob in bmap:
-            lm.setdefault(ob, t)
-        db = lambda bar: lm[bar * 4]
-        idx = {r: i for i, r in enumerate(keep)}
-        base = {'04a': db(31), '08': db(71), '09a': db(77)}
-        if HAS14:
-            base.update({'09n': starts[idx[(36, 39)]], '09b': starts[idx[(82, keep[idx[(36, 39)] + 2][1])]]})
-        return db, base
-    # pass 1: natural speech timing after 09b decides how much groove and quiet music is needed
-    keep = plan()
-    m, bmap, starts = edit_music(keep)
-    db, base = landmarks(bmap, starts, keep)
-    tl, _ = build(bmap, base)
-    c07 = [d for d in tl if d['name'] == '07b'][0]['cut']
-    base['07b'] = [t for t, _ in bmap if t > c07 + 0.3][0]
-    tl, t_end = build(bmap, base)
-    cut = {d['name']: d['cut'] for d in tl}
-    t_from = cut['09b'] if HAS14 else cut['09a']
-    bar_c = 2.257; bar_s = 2.29
-    half = lambda x: round(2 * x) / 2
-    c_end = min(82 + half((cut['12'] - t_from) / bar_c), 112) if HAS14 else min(80 + half((cut['12'] - db(80)) / bar_c), 112)
-    quiet_bars = half((t_end + 0.4 - cut['12']) / bar_s)    # bars from the quiet section to the final chord
-    keep = plan(c_end, quiet_bars - 13)
-    m, bmap, starts = edit_music(keep)
+    m, bmap, starts = edit_music(KEEP)
     wavfile.write(W + 'music_edit.wav', SR, m.astype(np.float32))
-    db, base = landmarks(bmap, starts, keep)
-    base['07b'] = [t for t, _ in bmap if t > c07 + 0.3][0]
-    base['12'] = db(112)
-    tail = db(125)
-    print('music plan', keep)
-    # pass 2: spread the small residuals over the neighbouring pauses so the anchored cuts stay in range
-    extra = {'15': 0.25} if HAS15 else {}
-    pre12, post12 = ['10a', '10b', '10c', '11'], ['13a', '13b'] + (['15'] if HAS15 else [])
-    for it in range(30):
+    first = {}
+    for t, ob in bmap:
+        first.setdefault(ob, t)
+    base = {n: starts[i] for n, i in ANCHOR_SEG.items()}
+    tail = first[TAIL_BAR * 4]
+    order = [d[0] for d in ITEMS]
+    anchors = sorted(base, key=order.index)
+    # residuals at anchored cuts are spread over the free junctions since the previous anchor
+    extra = {'15': 0.25}
+    for it in range(40):
         tl, t_end = build(bmap, base, extra)
         d = {x['name']: x for x in tl}
-        p12 = d['12']['pause']
-        r1 = 0 if 2.0 <= p12 <= 2.5 else (2.25 - p12)
-        r2 = (tail - 0.4) - t_end
-        if abs(r1) < 0.05 and abs(r2) < 0.3:
+        done = True
+        prev = 0
+        for a in anchors + ['_tail']:
+            idx = order.index(a) if a != '_tail' else len(order)
+            free = [n for n in order[prev + 1:idx] if n not in base and d.get(n, {}).get('kind') in ('intra', 'scene')]
+            if a == '_tail':
+                r = (tail - 0.6) - t_end      # final chord ~0.6 s after the last word
+                ok = abs(r) < 0.3   # one beat is 0.56 s: tighter tolerance only oscillates
+            else:
+                lo, hi = RANGE[d[a]['kind']]; p = d[a]['pause']
+                r = 0 if lo <= p <= hi else ((lo + hi) / 2 - p)
+                ok = r == 0
+            if not ok and free:
+                done = False
+                for n in free:
+                    extra[n] = extra.get(n, 0) + (r if a == '_tail' else -r) / len(free) * 0.5
+            prev = idx
+        if done:
             break
-        for n in pre12: extra[n] = extra.get(n, 0) - r1 / len(pre12) * 0.5
-        for n in post12: extra[n] = extra.get(n, 0) + r2 / len(post12) * 0.5
     total = round((t_end + 6.8) * 25) / 25
-    print('tail start %.2f, last word %.2f, end %.2f, music len %.2f' % (tail, t_end, total, len(m) / SR))
+    print('tail %.2f, last word %.2f, end %.2f, music len %.2f' % (tail, t_end, total, len(m) / SR))
     for d in tl:
         print('%-7s cut %7.2f  speech %7.2f-%7.2f  pause %s' % (d['name'], d['cut'], d.get('t0', 0), d.get('t1', 0),
               '' if d.get('pause') is None else '%.2f' % d['pause']))
