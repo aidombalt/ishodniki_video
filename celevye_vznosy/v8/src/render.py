@@ -1,6 +1,7 @@
 """Frame renderer: pycairo shapes/compositing, PIL+raqm text, Golos Text. Usage:
    render.py stills t1 t2 ...   -> PNG stills
-   render.py video               -> clean + subtitled MP4, SRT
+   render.py video               -> clean MP4 and SRT
+   render.py srt                 -> SRT only
    render.py check               -> layout checks at rest moments"""
 import sys, json, math, subprocess, re
 import numpy as np, cairo
@@ -1040,6 +1041,8 @@ def main():
             if i % 500 == 0: print('frame', i, '/', n, flush=True)
         p1.stdin.close(); p1.wait()
         json.dump(stats, open(WORK + 'framestats.json', 'w'))
+        open(OUT + 'celevye_vznosy_v8.srt', 'w', encoding='utf-8').write(srt())
+    elif mode == 'srt':   # subtitles only (they are not burned into the video)
         open(OUT + 'celevye_vznosy_v8.srt', 'w', encoding='utf-8').write(srt())
     elif mode == 'check':
         check()

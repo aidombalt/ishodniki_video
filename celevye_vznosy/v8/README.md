@@ -18,3 +18,5 @@
 
 Сборка: проект v5 (`../v5`) плюс голос v7 (`../v7/input/voice`, остальное — `../v5/input`), сюда — `src/*`. Затем:
 `python3 src/prepare.py && python3 src/audio.py && python3 src/render.py check && python3 src/render.py video && python3 src/qa.py`.
+- Выход: `output/celevye_vznosy_v8.mp4` (без субтитров, 6:18,8, −16,0 LUFS, пик −3,7 dBFS), `celevye_vznosy_v8.srt` (80 титров; длинная фраза про ящики разбита по смыслу), раскадровки 640 и 390. `python3 src/render.py srt` пересобирает только субтитры.
+- Проверка: вёрстка без замечаний; единственный резкий переход в кадрах (2:15,4) — появление синей плашки «Единовременные целевые взносы», так задумано.
